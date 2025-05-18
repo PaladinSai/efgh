@@ -2,12 +2,7 @@
 质量控制模块，使用sgkit对zarr文件进行QC，输出QC后的zarr文件。
 Quality control module, use sgkit to perform QC on zarr file and output QC'ed zarr.
 """
-
-import os
 import sgkit as sg
-import xarray as xr
-import pandas as pd
-from .util import out_test_csv
 
 def run_qc(config,ds):
     """

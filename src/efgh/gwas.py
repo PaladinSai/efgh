@@ -19,15 +19,13 @@ def run_gwas(ds, config):
     # Remove samples with missing trait values
     ds = ds.sel(samples=~ds[trait].isnull())
 
-    # print(f"call_dosage 有效值范围: [{ds['call_dosage'].min().compute()}, {ds['call_dosage'].max().compute()}]")
-    # print(f"使用的性状列: {trait}")
-    # print(f"数据集中性状列: {list(ds.data_vars)}")
-    # # 检查samples维度大小
-    # print(f"Samples维度大小: {ds.sizes['samples']}")
-    # print(f"Variants维度大小: {ds.sizes['variants']}")
-    # print(f"call_dosage 形状: {ds['call_dosage'].shape}")
-    # print(f"call_dosage 有效值范围: [{ds['call_dosage'].min().compute()}, {ds['call_dosage'].max().compute()}]")
-    # out_test_csv(ds, config, "data_inspection.csv")
+    # 加入PCA协变量
+    covariates = [f"sample_pca_projection_{i}" for i in range(config.pca.pcs)]
+
+    print(covariates)
+
+    for cov in covariates:
+        assert cov in ds, f"{cov} not in dataset"
 
     # 运行GWAS分析
     # Run GWAS analysis
@@ -36,7 +34,7 @@ def run_gwas(ds, config):
         ds,
         add_intercept=True,
         dosage='call_dosage',  # 剂量变量名称 / dosage variable name
-        covariates=[],         # 协变量名称列表 / list of covariate names
+        covariates=covariates,         # 协变量名称列表 / list of covariate names
         traits=[trait]         # 性状变量名称 / trait variable name
     )
     print("GWAS analysis completed.")

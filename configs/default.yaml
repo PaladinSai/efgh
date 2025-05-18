@@ -13,6 +13,8 @@ qc:
   variant_missing: 0.02                      # 变异位点缺失率过滤阈值
   sample_missing:  0.02                       # 样本缺失率过滤阈值
   hwe: 1e-6                                 # Hardy-Weinberg平衡检验p值过滤阈值
+pca:
+  pcs: 5                              # 主成分分析（PCA）计算的主成分数量
 gwas:
-  traits: CD8                             # 需要分析的表型列名（留空则分析所有表型列）
+  traits: MCH                             # 需要分析的表型列名（留空则分析所有表型列）
   #covariates:                             # 需要分析的协变量列表（留空则不使用协变量）[age, sex, pc1, pc2]

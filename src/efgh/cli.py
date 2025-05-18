@@ -1,10 +1,10 @@
 import click
 from .config import load_config, get_default_cli_options
 import time
-import sgkit as sg
 from .vcf2zarr import vcf_to_zarr
 from .process import run_process
 from .qc import run_qc
+from .pca import run_pca
 from .gwas import run_gwas
 from .plotting import manhattan_plot, qq_plot
 
@@ -92,7 +92,11 @@ def run(user_config, **kwargs):
     t1 = time.time()
     step_times["QC"] = t1 - t0
 
-    # TODO： PCA
+    # 步骤4：pca
+    t0 = time.time()
+    ds = run_pca(config, ds)
+    t1 = time.time()
+    step_times["PCA"] = t1 - t0
 
     # 步骤5：gwas
     # Step 5: GWAS
