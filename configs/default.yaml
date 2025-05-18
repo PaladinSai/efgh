@@ -1,0 +1,18 @@
+input:
+  vcf_path: "./data/mouse_hs1940.vcf.gz"    # VCF或VCF.GZ基因型文件路径（相对于项目根目录） 1kg.vcf.bgz
+  pheno_path: "./data/mouse_hs1940.csv"     # 表型CSV文件路径（相对于项目根目录） 1kg_annotations.txt
+
+output:
+  outdir: "./results"                       # 输出目录（相对于项目根目录）
+  result_path: ""                           # 关联分析结果输出路径（可选）
+
+qc:
+  # 表型列名
+  # 对应的数值范围
+  maf: 0.01                                 # 最小等位基因频率（MAF）过滤阈值
+  variant_missing: 0.02                      # 变异位点缺失率过滤阈值
+  sample_missing:  0.02                       # 样本缺失率过滤阈值
+  hwe: 1e-6                                 # Hardy-Weinberg平衡检验p值过滤阈值
+gwas:
+  traits: CD8                             # 需要分析的表型列名（留空则分析所有表型列）
+  #covariates:                             # 需要分析的协变量列表（留空则不使用协变量）[age, sex, pc1, pc2]
