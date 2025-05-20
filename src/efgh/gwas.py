@@ -1,7 +1,7 @@
 import os
 import sgkit as sg
 import pandas as pd
-from .util import out_test_csv
+import numpy as np
 
 def run_gwas(ds, config):
     """
@@ -37,43 +37,36 @@ def run_gwas(ds, config):
     )
     print("GWAS analysis completed.")
 
-    n_samples = ds.sizes['samples']
+    # 列出所有变量（包括坐标变量）
+    print(f"完成gwas后的全部列：{list(ds.variables.keys())}")
+
     chr_ = ds_lr['variant_contig_name'].values
-    rs = ds_lr['variant_id'].values
-    ps = ds_lr['variant_position'].values
-    n_obs = ds_lr['variant_n_called'].values
-    n_mis = n_samples - n_obs
-    af = ds_lr['variant_allele_frequency'].values
+    pos = ds_lr['variant_position'].values
+    locus = [f"{c}:{p}" for c, p in zip(chr_, pos)]
+    alleles = ds_lr['variant_allele'].values
+    alleles_str = [str(list(a)) for a in alleles]
+    n = ds_lr['variant_n_called'].values
+    # # ds_lr['call_dosage'] 形状为 (variants, samples)
+    # call_dosage = ds_lr['call_dosage'].values
+    # sum_x = np.nansum(call_dosage, axis=1)
+    # # 获取性状值，顺序与 call_dosage 匹配
+    # y = ds[trait].values
+    # # 计算 y_transpose_x
+    # y_transpose_x = np.nansum(call_dosage * y, axis=1)
     beta = ds_lr['variant_linreg_beta'][:, 0].values
-    #se = ds_lr['variant_linreg_standard_error'][:, 0].values
-    p_wald = ds_lr['variant_linreg_p_value'][:, 0].values
+    t_stat = ds_lr['variant_linreg_t_value'][:, 0].values
+    p_value = ds_lr['variant_linreg_p_value'][:, 0].values
 
-    # 动态处理等位基因
-    alleles = ds_lr['variant_allele'].values  # shape: (variants, alleles)
-    max_alleles = alleles.shape[1]
-    allele_cols = {}
-    for i in range(max_alleles):
-        allele_cols[f'allele{i}'] = alleles[:, i]
-
-    # 动态处理等位基因频率
-    af_cols = {}
-    for i in range(max_alleles):
-        af_cols[f'af{i}'] = af[:, i]
-
-    # 组装DataFrame
-    data = {
-        "chr": chr_,
-        "rs": rs,
-        "ps": ps,
-        "n_mis": n_mis,
-        "n_obs": n_obs,
-        **allele_cols,
-        **af_cols,
+    df = pd.DataFrame({
+        "locus": locus,
+        "alleles": alleles_str,
+        "n": n,
+        # "sum_x": sum_x,
+        # "y_transpose_x": y_transpose_x,
         "beta": beta,
-        #"se": se,
-        "p_wald": p_wald
-    }
-    df = pd.DataFrame(data)
+        "t_stat": t_stat,
+        "p_value": p_value
+    })
     df.to_csv(gwas_results_path, index=False)
 
     return ds_lr
