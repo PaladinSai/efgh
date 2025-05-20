@@ -15,8 +15,4 @@ def run_pca(config,ds):
     ds_pca = sg.pca(ds_pca)
     for i in range(pcs):
         ds[f"sample_pca_projection_{i}"] = ds_pca.sample_pca_projection[:, i]
-
-    print([v for v in ds.variables if v.startswith("sample_pca_projection_")])
-    for i in range(config.pca.pcs):
-        print(ds[f"sample_pca_projection_{i}"].values[:10])
     return ds

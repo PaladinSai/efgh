@@ -53,16 +53,6 @@ def run_qc(config,ds):
         print(f"Variant count before MAF filtering: {ds.sizes['variants']}")
         maf_filter = (ds.variant_allele_frequency[:,1] > qc_cfg.maf)
         ds = ds.sel(variants=maf_filter.compute())
-        # allele_frequency = ds["variant_allele_frequency"]
-        # maf = None
-        # if ds.sizes['alleles'] > 2:
-        #     maf = allele_frequency.min(dim="alleles")
-        # elif ds.sizes['alleles'] == 2:
-        #     maf = xr.where(allele_frequency.sel(alleles=1) <= 0.5, allele_frequency.sel(alleles=1),1 - allele_frequency.sel(alleles=1))
-        # if maf is not None:
-        #     print(f"Filtering variants with MAF less than {qc_cfg.maf} ...")
-        #     variants_maf_filter = (maf >= qc_cfg.maf).compute()
-        #     ds = ds.sel(variants=variants_maf_filter)
         print(f"Variant count after MAF filtering: {ds.sizes['variants']}")
 
     # HWE过滤
@@ -72,14 +62,13 @@ def run_qc(config,ds):
         ds =  sg.hardy_weinberg_test(ds)
         print(f"Filtering variants with HWE less than {qc_cfg.hwe} ...")
         hwe_filter = (ds.variant_hwe_p_value > float(qc_cfg.hwe))
-        #ds = ds.sel(variants=((ds.variant_allele_frequency[:,1] > 0.01) & (ds.variant_hwe_p_value > float(qc_cfg.hwe))).compute())
         ds = ds.sel(variants=hwe_filter.compute())
         print(f"Variant count after HWE filtering: {ds.sizes['variants']}")
 
     # print(f"QC后样本数量: {ds.sizes['samples']}")
     # print(f"QC后变异位点数量: {ds.sizes['variants']}")
-    # print(f"Sample count after QC: {ds.sizes['samples']}")
-    # print(f"Variant count after QC: {ds.sizes['variants']}")
+    print(f"Sample count after QC: {ds.sizes['samples']}")
+    print(f"Variant count after QC: {ds.sizes['variants']}")
 
     return ds
 

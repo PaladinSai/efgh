@@ -19,6 +19,8 @@ def run_gwas(ds, config):
     # Remove samples with missing trait values
     ds = ds.sel(samples=~ds[trait].isnull())
 
+
+
     # 加入PCA协变量
     covariates = [f"sample_pca_projection_{i}" for i in range(config.pca.pcs)]
 
@@ -37,22 +39,21 @@ def run_gwas(ds, config):
     )
     print("GWAS analysis completed.")
 
-    # 列出所有变量（包括坐标变量）
-    print(f"完成gwas后的全部列：{list(ds.variables.keys())}")
-
+    print("Preparing GWAS results file...")
     chr_ = ds_lr['variant_contig_name'].values
     pos = ds_lr['variant_position'].values
     locus = [f"{c}:{p}" for c, p in zip(chr_, pos)]
     alleles = ds_lr['variant_allele'].values
     alleles_str = [str(list(a)) for a in alleles]
-    n = ds_lr['variant_n_called'].values
-    # # ds_lr['call_dosage'] 形状为 (variants, samples)
-    # call_dosage = ds_lr['call_dosage'].values
-    # sum_x = np.nansum(call_dosage, axis=1)
-    # # 获取性状值，顺序与 call_dosage 匹配
-    # y = ds[trait].values
-    # # 计算 y_transpose_x
-    # y_transpose_x = np.nansum(call_dosage * y, axis=1)
+    # n = ds_lr['variant_n_called'].values
+    n = ds_lr.sizes['samples']
+    # ds_lr['call_dosage'] 形状为 (variants, samples)
+    call_dosage = ds_lr['call_dosage'].values
+    sum_x = np.nansum(call_dosage, axis=1)
+    # 获取性状值，顺序与 call_dosage 匹配
+    y = ds[trait].values
+    # 计算 y_transpose_x
+    y_transpose_x = np.nansum(call_dosage * y, axis=1)
     beta = ds_lr['variant_linreg_beta'][:, 0].values
     t_stat = ds_lr['variant_linreg_t_value'][:, 0].values
     p_value = ds_lr['variant_linreg_p_value'][:, 0].values
@@ -61,13 +62,14 @@ def run_gwas(ds, config):
         "locus": locus,
         "alleles": alleles_str,
         "n": n,
-        # "sum_x": sum_x,
-        # "y_transpose_x": y_transpose_x,
+        "sum_x": sum_x,
+        "y_transpose_x": y_transpose_x,
         "beta": beta,
         "t_stat": t_stat,
         "p_value": p_value
     })
     df.to_csv(gwas_results_path, index=False)
+    print(f"GWAS results saved to: {gwas_results_path}")
 
     return ds_lr
 
