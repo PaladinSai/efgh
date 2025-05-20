@@ -22,8 +22,6 @@ def run_gwas(ds, config):
     # 加入PCA协变量
     covariates = [f"sample_pca_projection_{i}" for i in range(config.pca.pcs)]
 
-    print(covariates)
-
     for cov in covariates:
         assert cov in ds, f"{cov} not in dataset"
 
@@ -39,16 +37,44 @@ def run_gwas(ds, config):
     )
     print("GWAS analysis completed.")
 
-    # out_test_csv(ds, config, "data_result.csv")
+    n_samples = ds.sizes['samples']
+    chr_ = ds_lr['variant_contig_name'].values
+    rs = ds_lr['variant_id'].values
+    ps = ds_lr['variant_position'].values
+    n_obs = ds_lr['variant_n_called'].values
+    n_mis = n_samples - n_obs
+    af = ds_lr['variant_allele_frequency'].values
+    beta = ds_lr['variant_linreg_beta'][:, 0].values
+    #se = ds_lr['variant_linreg_standard_error'][:, 0].values
+    p_wald = ds_lr['variant_linreg_p_value'][:, 0].values
 
-    selected_vars = [
-        "variant_contig_name",
-        "variant_contig",
-        "variant_position",
-        "variant_linreg_p_value"
-    ]
-    df = ds_lr[selected_vars].to_dataframe()
-    df.to_csv(gwas_results_path)
+    # 动态处理等位基因
+    alleles = ds_lr['variant_allele'].values  # shape: (variants, alleles)
+    max_alleles = alleles.shape[1]
+    allele_cols = {}
+    for i in range(max_alleles):
+        allele_cols[f'allele{i}'] = alleles[:, i]
+
+    # 动态处理等位基因频率
+    af_cols = {}
+    for i in range(max_alleles):
+        af_cols[f'af{i}'] = af[:, i]
+
+    # 组装DataFrame
+    data = {
+        "chr": chr_,
+        "rs": rs,
+        "ps": ps,
+        "n_mis": n_mis,
+        "n_obs": n_obs,
+        **allele_cols,
+        **af_cols,
+        "beta": beta,
+        #"se": se,
+        "p_wald": p_wald
+    }
+    df = pd.DataFrame(data)
+    df.to_csv(gwas_results_path, index=False)
 
     return ds_lr
 
