@@ -24,15 +24,6 @@ def run_process(config, vcz_path):
     print("Loading phenotype file...")
     df = pd.read_csv(pheno_path, sep=",", index_col= 0)
     df.index.name = "samples"
-    trait = 'MCH'
-    plt.figure(figsize=(12, 5))
-    plt.subplot(1, 2, 1)
-    df[trait].hist(bins=30)
-    plt.title('Histogram')
-    plt.subplot(1, 2, 2)
-    df.boxplot(column=trait)
-    plt.title('Boxplot')
-    plt.show()
     ds_annotations = df.to_xarray()
 
     print(f"表型文件的全部列：{list(ds_annotations.variables.keys())}")
