@@ -6,7 +6,6 @@ from .process import run_process
 from .qc import run_qc
 from .pca import run_pca
 from .gwas import run_gwas
-from .plotting import manhattan_plot, qq_plot
 
 
 DEFAULT_CONFIG_PATH = "configs/default.yaml"
@@ -104,18 +103,6 @@ def run(user_config, **kwargs):
     ds_lr = run_gwas(ds, config)
     t1 = time.time()
     step_times["GWAS"] = t1 - t0
-
-    # 步骤6：绘图
-    # Step 6: Plotting
-    t0 = time.time()
-    print("Generating Manhattan plot...")
-    manhattan_plot(ds_lr, config)
-    print("Manhattan plot generated.")
-    print("Generating QQ plot...")
-    qq_plot(ds_lr, config)
-    print("QQ plot generated.")
-    t1 = time.time()
-    step_times["Plotting"] = t1 - t0
 
     total_end = time.time()
     print("\nStep timing (seconds):")

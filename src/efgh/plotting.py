@@ -5,43 +5,107 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 
-def manhattan_plot(ds_lr, config):
-    df = ds_lr[["variant_contig_name", "variant_contig", "variant_position", "variant_linreg_p_value"]].to_dataframe()
+def manhattan_plot(ds_lr, config, trait, trait_idx):
+    # 读取配置
+    man_cfg = getattr(config.gwas, "manhattan", None)
+    chrom_colors = getattr(man_cfg, "chrom_colors", ["#1f77b4", "#ff7f0e"]) if man_cfg else ["#1f77b4", "#ff7f0e"]
+    threshold_lines = getattr(man_cfg, "threshold_lines",
+                              [{"value": 5, "style": "solid", "color": "#000000"}]) if man_cfg else [
+        {"value": 5, "style": "solid", "color": "#000000"}]
+    point_colors = getattr(man_cfg, "point_colors", {}) if man_cfg else {}
+    color_below = getattr(point_colors, "below", chrom_colors[0])
+    color_above = getattr(point_colors, "above", "#d62728")
+    color_between = getattr(point_colors, "between", "#2ca02c")
+    # 数据准备
+    df = pd.DataFrame({
+        "variant_contig_name": ds_lr["variant_contig_name"].values,
+        "variant_contig": ds_lr["variant_contig"].values,
+        "variant_position": ds_lr["variant_position"].values,
+        "variant_linreg_p_value": ds_lr["variant_linreg_p_value"][:, trait_idx].values
+    })
     df["variant_linreg_log_p_value"] = -np.log10(df["variant_linreg_p_value"])
     df = df.astype({"variant_position": np.int64})
 
+    # 染色体累计坐标
     running_pos = 0
     cumulative_pos = []
     for chrom, group_df in df.groupby("variant_contig"):
         cumulative_pos.append(group_df["variant_position"] + running_pos)
         running_pos += group_df["variant_position"].max()
     df["cumulative_pos"] = pd.concat(cumulative_pos)
-    df["color"] = df["variant_contig"].apply(lambda x: "A" if x % 2 == 0 else "B")
-    g = sns.relplot(
-        data=df,
-        x="cumulative_pos",
-        y="variant_linreg_log_p_value",
-        hue="color",
-        palette=["blue", "orange"],
-        linewidth=0,
-        s=10,
-        legend=None,
-        aspect=3
-    )
-    g.ax.set_xlabel("Chromosome")
-    g.ax.set_xticks(df.groupby("variant_contig")["cumulative_pos"].median())
-    g.ax.set_xticklabels(df["variant_contig_name"].unique())
+    df["chrom_color"] = df["variant_contig"] % 2
+
+    # 阈值线处理
+    thresholds = sorted([line["value"] for line in threshold_lines])
+    # 分类
+    if len(thresholds) == 1:
+        df["point_cat"] = np.where(df["variant_linreg_log_p_value"] >= thresholds[0], "above", "below")
+    elif len(thresholds) == 2:
+        t1, t2 = thresholds
+        df["point_cat"] = np.select(
+            [df["variant_linreg_log_p_value"] >= t2,
+             df["variant_linreg_log_p_value"] >= t1],
+            ["above", "between"],
+            default="below"
+        )
+    else:
+        df["point_cat"] = "below"
+
+    # 绘图
+    fig, ax = plt.subplots(figsize=(16, 6))
+    for chrom, color_idx in zip(df["variant_contig"].unique(), [0, 1] * len(df["variant_contig"].unique())):
+        for cat, color in [("below", color_below), ("above", color_above), ("between", color_between)]:
+            sub = df[(df["variant_contig"] == chrom) & (df["point_cat"] == cat)]
+            if not sub.empty:
+                ax.scatter(sub["cumulative_pos"], sub["variant_linreg_log_p_value"],
+                            c=color if cat != "below" else chrom_colors[color_idx % len(chrom_colors)],
+                            s=10, label=f"{chrom}-{cat}" if cat != "below" else None, alpha=0.8)
+
+    # 阈值线
+    for i, line in enumerate(threshold_lines):
+        y = line.get("value", 5)
+        style = line.get("style", "solid")
+        color = line.get("color", "#d62728")
+        ax.axhline(y, color=color, linestyle="-" if style == "solid" else "--", linewidth=1.5, zorder=0)
+
+    # 坐标轴与标签
+    ax.set_xlabel("Chromosome")
+    ax.set_ylabel("-log10(p-value)")
+    ax.set_xticks(df.groupby("variant_contig")["cumulative_pos"].median())
+    ax.set_xticklabels(df["variant_contig_name"].unique())
+    ax.set_title(f"Manhattan plot for {trait}")
 
     output_dir = config.output.outdir
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, "manhattan_plot.png")
-    g.savefig(output_path)
+    output_path = os.path.join(output_dir, f"manhattan_plot_{trait}.png")
+    fig.savefig(output_path)
     plt.close()
     print(f"Manhattan plot saved to {output_path}")
+    # g = sns.relplot(
+    #     data=df,
+    #     x="cumulative_pos",
+    #     y="variant_linreg_log_p_value",
+    #     hue="color",
+    #     palette=["blue", "orange"],
+    #     linewidth=0,
+    #     s=10,
+    #     legend=None,
+    #     aspect=3
+    # )
+    # g.ax.set_xlabel("Chromosome")
+    # g.ax.set_xticks(df.groupby("variant_contig")["cumulative_pos"].median())
+    # g.ax.set_xticklabels(df["variant_contig_name"].unique())
+    #
+    # output_dir = config.output.outdir
+    # os.makedirs(output_dir, exist_ok=True)
+    # output_path = os.path.join(output_dir, f"manhattan_plot_{trait}.png")
+    # g.savefig(output_path)
+    # plt.close()
+    # print(f"Manhattan plot saved to {output_path}")
 
 
-def qq_plot(ds_lr, config):
-    p = ds_lr["variant_linreg_p_value"].squeeze().values
+def qq_plot(ds_lr, config, trait, trait_idx):
+    p = ds_lr["variant_linreg_p_value"][:, trait_idx].squeeze().values
     p.sort()
     n = len(p)
     expected_p = -np.log10(np.arange(1, n + 1) / n)
@@ -60,7 +124,7 @@ def qq_plot(ds_lr, config):
 
     output_dir = config.output.outdir
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, "qq_plot.png")
+    output_path = os.path.join(output_dir, f"qq_plot_{trait}.png")
     fig.savefig(output_path)
     plt.close()
     print(f"QQ plot saved to {output_path}")

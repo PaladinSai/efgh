@@ -1,20 +1,32 @@
 input:
-  vcf_path: "./data/mouse_hs1940.vcf.gz"    # VCF或VCF.GZ基因型文件路径（相对于项目根目录） 1kg.vcf.bgz
-  pheno_path: "./data/mouse_hs1940.csv"     # 表型CSV文件路径（相对于项目根目录） 1kg_annotations.txt
+  vcf_path: "./data/mouse_hs1940.vcf.gz"  # VCF或VCF.GZ基因型文件路径（相对于项目根目录） 1kg.vcf.bgz
+  pheno_path: "./data/mouse_hs1940.csv"  # 表型CSV文件路径（相对于项目根目录） 1kg_annotations.txt
 
 output:
-  outdir: "./results"                       # 输出目录（相对于项目根目录）
-  result_path: ""                           # 关联分析结果输出路径（可选）
+  outdir: "./results"                                # 输出目录（相对于项目根目录）
+  result_path: ""                                    # 关联分析结果输出路径（可选）
 
 qc:
-  # 表型列名
-  # 对应的数值范围
-  maf: 0.01                                 # 最小等位基因频率（MAF）过滤阈值
-  variant_missing: 0.02                      # 变异位点缺失率过滤阈值
-  sample_missing:  0.02                       # 样本缺失率过滤阈值
-  hwe: 1e-6                                 # Hardy-Weinberg平衡检验p值过滤阈值
+  maf: 0.01                                          # 最小等位基因频率（MAF）过滤阈值
+  variant_missing: 0.02                              # 变异位点缺失率过滤阈值
+  sample_missing:  0.02                              # 样本缺失率过滤阈值
+  hwe: 1e-6                                          # Hardy-Weinberg平衡检验p值过滤阈值
 pca:
-  pcs: 3                              # 主成分分析（PCA）计算的主成分数量
+  pcs: 3                                             # 主成分分析（PCA）计算的主成分数量
 gwas:
-  traits: MCH                             # 需要分析的表型列名（留空则分析所有表型列）
-  #covariates:                             # 需要分析的协变量列表（留空则不使用协变量）[age, sex, pc1, pc2]
+  traits: ["CD8"]                                    # 需要分析的表型列名["CD8", "MCH"]
+  covariates:                                        # 需要分析的协变量列表（留空则不使用协变量），示例格式：["covariates_1","covariates_2"]
+  models: ["linear_regression"]                      # 支持 ["linear_regression", "regenie"] 或两者组合
+  manhattan:
+    chrom_colors: ["#1f77b4", "#ff7f0e"]  # 染色体交替颜色
+    threshold_lines:
+      - value: 5
+        style: solid
+        color: "#000000"
+      - value: 10
+        style: dashed
+        color: "#000000"
+    point_colors:
+      below: "#1f77b4"
+      above: "#d62728"
+      between: "#2ca02c"
