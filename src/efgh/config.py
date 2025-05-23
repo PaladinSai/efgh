@@ -39,6 +39,10 @@ class Config:
                 elif not isinstance(val, list):
                     setattr(self.gwas, key, list(val))
         self._dict = config_dict
+        # 支持cpu_cores参数，若未设置则默认为10
+        # Support cpu_cores parameter, default to 10 if not set
+        if not hasattr(self, "cpu_cores"):
+            self.cpu_cores = config_dict.get("cpu_cores", 10)
 
     def to_dict(self):
         # 递归转换为普通字典
@@ -149,7 +153,7 @@ def flatten_yaml_dict(d, prefix=""):
 
 def get_default_cli_options(default_yaml_path_or_func):
     """
-    读取yaml配置，返回所有参数的扁平字典及默认值
+    读取yaml配置，��回所有参数的扁平字典及默认值
     Read yaml config, return flat dict of all parameters and default values
     用于cli.py自动生成命令行参数 / Used for auto-generating CLI options in cli.py
     """
@@ -171,3 +175,16 @@ def get_default_cli_options(default_yaml_path_or_func):
         logging.error("Failed to load default CLI options from config.")
         raise RuntimeError("Failed to load default CLI options from config.") from None
 
+def get_cpu_cores(config):
+    """
+    获取CPU核心数，默认10，小于1自动设为1
+    Get CPU core count, default 10, set to 1 if less than 1
+    """
+    cpu_cores = getattr(config, "cpu_cores", 10)
+    try:
+        cpu_cores = int(cpu_cores)
+        if cpu_cores < 1:
+            cpu_cores = 1
+    except Exception:
+        cpu_cores = 10
+    return cpu_cores

@@ -6,11 +6,12 @@ VCF to Zarr module. Uses the bio2zarr CLI tool to convert VCF files to Zarr form
 import os
 import subprocess
 import logging
+from .config import get_cpu_cores
 
 def vcf_to_zarr(config):
     """
-    使用bio2zarr CLI将VCF文件转换为zarr格式。
-    Convert VCF file to Zarr format using bio2zarr CLI.
+    使用bio2zarr CLI将VCF文件转换为zarr格式，支持多进程。
+    Convert VCF file to Zarr format using bio2zarr CLI, support multi-process.
     参数:
         config: Config对象，包含所有配置参数
         config: Config object containing all configuration parameters
@@ -22,6 +23,10 @@ def vcf_to_zarr(config):
     basename = "genotype_raw"
     icf_path = os.path.join(outdir, f"{basename}.icf")
     zarr_path = os.path.join(outdir, f"{basename}.vcz")
+
+    # 获取CPU核心数，调用config中的方法
+    # Get CPU core count from config utility
+    cpu_cores = get_cpu_cores(config)
 
     # 创建输出目录
     # Create output directory
@@ -58,24 +63,24 @@ def vcf_to_zarr(config):
         logging.info(f"Zarr file already exists: {zarr_path}")
         return zarr_path
 
-    # 1. vcf2zarr explode --force vcf icf
-    # 1. vcf2zarr explode --force vcf icf
+    # 1. vcf2zarr explode --force --worker-processes N vcf icf
+    # 1. vcf2zarr explode --force --worker-processes N vcf icf
     try:
-        logging.info(f"Running: vcf2zarr explode --force {vcf_path} {icf_path}")
+        logging.info(f"Running: vcf2zarr explode --force --worker-processes {cpu_cores} {vcf_path} {icf_path}")
         subprocess.run(
-            ["vcf2zarr", "explode", "--force", vcf_path, icf_path],
+            ["vcf2zarr", "explode", "--force", "--worker-processes", str(cpu_cores), vcf_path, icf_path],
             check=True
         )
     except Exception:
         logging.error("Failed to run 'vcf2zarr explode'. Please check your VCF file and bio2zarr installation.")
         raise RuntimeError("Failed to run 'vcf2zarr explode'.") from None
 
-    # 2. vcf2zarr encode --force icf vcz
-    # 2. vcf2zarr encode --force icf vcz
+    # 2. vcf2zarr encode --force --worker-processes N icf vcz
+    # 2. vcf2zarr encode --force --worker-processes N icf vcz
     try:
-        logging.info(f"Running: vcf2zarr encode --force {icf_path} {zarr_path}")
+        logging.info(f"Running: vcf2zarr encode --force --worker-processes {cpu_cores} {icf_path} {zarr_path}")
         subprocess.run(
-            ["vcf2zarr", "encode", "--force", icf_path, zarr_path],
+            ["vcf2zarr", "encode", "--force", "--worker-processes", str(cpu_cores), icf_path, zarr_path],
             check=True
         )
     except Exception:
@@ -84,4 +89,3 @@ def vcf_to_zarr(config):
 
     logging.info(f"VCF to Zarr conversion completed. Output path: {zarr_path}")
     return zarr_path
-

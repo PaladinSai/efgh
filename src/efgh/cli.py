@@ -2,12 +2,13 @@ import click
 import time
 import importlib.resources
 import logging
-from .config import load_config, get_default_cli_options
+from .config import load_config, get_default_cli_options, get_cpu_cores
 from .vcf2zarr import vcf_to_zarr
 from .process import run_process
 from .qc import run_qc
 from .pca import run_pca
 from .gwas import run_gwas
+from dask.distributed import Client, LocalCluster
 
 DEFAULT_CONFIG_PKG = "efgh.configs"
 DEFAULT_CONFIG_FILE = "default.yaml"
@@ -73,6 +74,11 @@ def run(user_config, **kwargs):
         default_pkg=DEFAULT_CONFIG_PKG,
         default_file=DEFAULT_CONFIG_FILE
     )
+    # Dask并行配置，根据配置文件设置线程池
+    cpu_cores = get_cpu_cores(config)
+    cluster = LocalCluster(n_workers=cpu_cores, threads_per_worker=1)
+    client = Client(cluster)
+
     t1 = time.time()
     step_times["Load config"] = t1 - t0
     logging.info(f"Step 'Load config' finished in {step_times['Load config']:.2f} seconds.")
@@ -117,6 +123,9 @@ def run(user_config, **kwargs):
     step_times["GWAS"] = t1 - t0
     logging.info(f"Step 'GWAS' finished in {step_times['GWAS']:.2f} seconds.")
 
+    # 步骤6：关闭dask集群 / Step 6: Close Dask cluster
+    client.close()
+    cluster.close()
     total_end = time.time()
     logging.info(f"Total time: {total_end - total_start:.2f} seconds")
 
