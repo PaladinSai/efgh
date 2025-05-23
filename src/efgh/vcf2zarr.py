@@ -7,23 +7,6 @@ import os
 import subprocess
 import pysam
 
-def create_vcf_index(vcf_path):
-    """
-    使用pysam为VCF文件生成索引（.tbi），如果已存在则跳过。
-    Create index (.tbi) for VCF file using pysam. Skip if already exists.
-    """
-    # 判断是否为bgzip压缩VCF
-    # Check if VCF is bgzip compressed
-    if vcf_path.endswith(('.gz', '.bgz')):
-        index_path = vcf_path + '.tbi'
-        if os.path.exists(index_path):
-            print(f"VCF index already exists: {index_path}")
-            return
-        print(f"Creating VCF index: {index_path}")
-        pysam.tabix_index(vcf_path, preset="vcf", force=True)
-    else:
-        raise RuntimeError("VCF file must be bgzip compressed (.vcf.gz) to create index.")
-
 def vcf_to_zarr(config):
     """
     使用bio2zarr CLI将VCF文件转换为zarr格式。
@@ -44,9 +27,16 @@ def vcf_to_zarr(config):
     # Create output directory
     os.makedirs(outdir, exist_ok=True)
 
-    # 先生成VCF索引
-    # Generate VCF index first
-    create_vcf_index(vcf_path)
+    # 检查VCF索引是否存在
+    # Check if VCF index exists
+    index_path = vcf_path + ".tbi"
+    if not os.path.exists(index_path):
+        raise RuntimeError(
+            f"VCF index file not found: {index_path}\n"
+            f"Please compress your VCF with bgzip and create the index with tabix first, e.g.:\n"
+            f"  bgzip {vcf_path.rstrip('.gz')}\n"
+            f"  tabix -p vcf {vcf_path}\n"
+        )
 
     # 如果zarr文件已存在，直接返回
     # If zarr file already exists, return directly

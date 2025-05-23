@@ -1,6 +1,5 @@
 import sgkit as sg
 import pandas as pd
-import matplotlib.pyplot as plt
 
 def run_process(config, vcz_path):
     """
