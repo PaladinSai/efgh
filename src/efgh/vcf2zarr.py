@@ -5,7 +5,6 @@ VCF to Zarr module. Uses the bio2zarr CLI tool to convert VCF files to Zarr form
 
 import os
 import subprocess
-import pysam
 
 def vcf_to_zarr(config):
     """
