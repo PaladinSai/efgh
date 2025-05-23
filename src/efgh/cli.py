@@ -1,14 +1,15 @@
 import click
-from .config import load_config, get_default_cli_options
 import time
+import importlib.resources
+from .config import load_config, get_default_cli_options
 from .vcf2zarr import vcf_to_zarr
 from .process import run_process
 from .qc import run_qc
 from .pca import run_pca
 from .gwas import run_gwas
 
-
-DEFAULT_CONFIG_PATH = "configs/default.yaml"
+DEFAULT_CONFIG_PKG = "efgh.configs"
+DEFAULT_CONFIG_FILE = "default.yaml"
 
 def add_dynamic_options(default_yaml_path):
     """
@@ -41,7 +42,7 @@ def cli():
     pass
 
 @cli.command()
-@add_dynamic_options(DEFAULT_CONFIG_PATH)
+@add_dynamic_options(lambda: importlib.resources.files(DEFAULT_CONFIG_PKG) / DEFAULT_CONFIG_FILE)
 @click.option('--config', 'user_config', default=None, help="User config yaml file path")
 def run(user_config, **kwargs):
     """
@@ -62,7 +63,13 @@ def run(user_config, **kwargs):
             cli_args[cli_key] = v
 
     t0 = time.time()
-    config = load_config(DEFAULT_CONFIG_PATH, user_config, cli_args)
+    config = load_config(
+        default_path=None,
+        user_path=user_config,
+        cli_args=cli_args,
+        default_pkg=DEFAULT_CONFIG_PKG,
+        default_file=DEFAULT_CONFIG_FILE
+    )
     t1 = time.time()
     step_times["Load config"] = t1 - t0
 

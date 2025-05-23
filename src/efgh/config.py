@@ -1,5 +1,6 @@
 import os
 import yaml
+import importlib.resources
 from typing import Any, Dict
 
 class Config:
@@ -59,6 +60,10 @@ def load_yaml(path):
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
+def load_yaml_from_package(package, resource):
+    with importlib.resources.open_text(package, resource, encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
 def deep_update(d, u):
     # 递归合并字典
     # Recursively merge dictionaries
@@ -69,7 +74,7 @@ def deep_update(d, u):
             d[k] = v
     return d
 
-def load_config(default_path, user_path=None, cli_args=None):
+def load_config(default_path=None, user_path=None, cli_args=None, default_pkg=None, default_file=None):
     """
     加载配置，优先级：命令行参数 > 用户yaml > 默认yaml
     Load config, priority: CLI args > user yaml > default yaml
@@ -77,7 +82,12 @@ def load_config(default_path, user_path=None, cli_args=None):
     返回Config对象 / Return Config object
     """
     # 1. 加载默认配置 / Load default config
-    config = load_yaml(default_path)
+    if default_pkg and default_file:
+        config = load_yaml_from_package(default_pkg, default_file)
+    elif default_path:
+        config = load_yaml(default_path)
+    else:
+        raise ValueError("No default config source specified")
 
     # 2. 加载用户自定义配置（如有）/ Load user config if provided
     if user_path and os.path.isfile(user_path):
@@ -106,12 +116,23 @@ def flatten_yaml_dict(d, prefix=""):
             items[new_key] = v
     return items
 
-def get_default_cli_options(default_yaml_path):
+def get_default_cli_options(default_yaml_path_or_func):
     """
     读取yaml配置，返回所有参数的扁平字典及默认值
     Read yaml config, return flat dict of all parameters and default values
     用于cli.py自动生成命令行参数 / Used for auto-generating CLI options in cli.py
     """
-    config = load_yaml(default_yaml_path)
+    if callable(default_yaml_path_or_func):
+        path = default_yaml_path_or_func()
+        with open(path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+    elif isinstance(default_yaml_path_or_func, str) and os.path.isfile(default_yaml_path_or_func):
+        with open(default_yaml_path_or_func, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+    else:
+        # 兼容包内资源
+        pkg, file = "efgh.configs", "default.yaml"
+        with importlib.resources.open_text(pkg, file, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
     return flatten_yaml_dict(config)
 
