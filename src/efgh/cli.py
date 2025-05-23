@@ -1,6 +1,7 @@
 import click
 import time
 import importlib.resources
+import logging
 from .config import load_config, get_default_cli_options
 from .vcf2zarr import vcf_to_zarr
 from .process import run_process
@@ -26,8 +27,7 @@ def add_dynamic_options(default_yaml_path):
                 "show_default": False,
                 "help": f"(override config) default: {default}"
             }
-            # 根据类型自动推断
-            # Automatically infer type
+            # 根据类型自动推断 / Automatically infer type
             if isinstance(default, bool):
                 param_kwargs["is_flag"] = True
             elif isinstance(default, list):
@@ -39,7 +39,12 @@ def add_dynamic_options(default_yaml_path):
 @click.group()
 def cli():
     """efgh 命令行工具 / efgh command line tool"""
-    pass
+    # 初始化 logging / Initialize logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s: %(message)s",
+        handlers=[logging.StreamHandler()]
+    )
 
 @cli.command()
 @add_dynamic_options(lambda: importlib.resources.files(DEFAULT_CONFIG_PKG) / DEFAULT_CONFIG_FILE)
@@ -52,13 +57,11 @@ def run(user_config, **kwargs):
     total_start = time.time()
     step_times = {}
 
-    # 提取命令行参数，去除None值
-    # Extract CLI arguments, remove None values
+    # 提取命令行参数，去除None值 / Extract CLI arguments, remove None values
     cli_args = {}
     for k, v in kwargs.items():
         if v is not None:
-            # 支持多级key（如input_vcf_path -> input.vcf_path）
-            # Support nested keys (e.g., input_vcf_path -> input.vcf_path)
+            # 支持多级key（如input_vcf_path -> input.vcf_path）/ Support nested keys (e.g., input_vcf_path -> input.vcf_path)
             cli_key = k.replace('_', '.')
             cli_args[cli_key] = v
 
@@ -72,50 +75,50 @@ def run(user_config, **kwargs):
     )
     t1 = time.time()
     step_times["Load config"] = t1 - t0
+    logging.info(f"Step 'Load config' finished in {step_times['Load config']:.2f} seconds.")
 
-    print("Configuration loaded. Starting GWAS workflow...")
-    print("Current configuration:")
+    # 输出配置信息 / Log configuration info
+    logging.info("Configuration loaded. Starting GWAS workflow...")
     import pprint
-    pprint.pprint(config.to_dict())
+    logging.info("Current configuration:\n" + pprint.pformat(config.to_dict()))
 
-    # 步骤1：VCF转Zarr
-    # Step 1: VCF to Zarr
+    # 步骤1：VCF转Zarr / Step 1: VCF to Zarr
     t0 = time.time()
     vcz_path = vcf_to_zarr(config)
     t1 = time.time()
     step_times["VCF to Zarr"] = t1 - t0
+    logging.info(f"Step 'VCF to Zarr' finished in {step_times['VCF to Zarr']:.2f} seconds.")
 
-    # 步骤2： 数据预处理
+    # 步骤2：数据处理 / Step 2: Data processing
     t0 = time.time()
     ds = run_process(config, vcz_path)
     t1 = time.time()
     step_times["process"] = t1 - t0
+    logging.info(f"Step 'process' finished in {step_times['process']:.2f} seconds.")
 
-    # 步骤3：质量控制
-    # Step 3: Quality Control
+    # 步骤3：质量控制 / Step 3: Quality Control
     t0 = time.time()
     ds = run_qc(config, ds)
     t1 = time.time()
     step_times["QC"] = t1 - t0
+    logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
 
-    # 步骤4：pca
+    # 步骤4：PCA分析 / Step 4: PCA
     t0 = time.time()
     ds = run_pca(config, ds)
     t1 = time.time()
     step_times["PCA"] = t1 - t0
+    logging.info(f"Step 'PCA' finished in {step_times['PCA']:.2f} seconds.")
 
-    # 步骤5：gwas
-    # Step 5: GWAS
+    # 步骤5：GWAS分析 / Step 5: GWAS
     t0 = time.time()
     ds_lr = run_gwas(ds, config)
     t1 = time.time()
     step_times["GWAS"] = t1 - t0
+    logging.info(f"Step 'GWAS' finished in {step_times['GWAS']:.2f} seconds.")
 
     total_end = time.time()
-    print("\nStep timing (seconds):")
-    for step, sec in step_times.items():
-        print(f"{step}: {sec:.2f}")
-    print(f"Total time: {total_end - total_start:.2f} seconds")
+    logging.info(f"Total time: {total_end - total_start:.2f} seconds")
 
 if __name__ == "__main__":
     cli()

@@ -1,6 +1,7 @@
 import os
 import yaml
 import importlib.resources
+import logging
 from typing import Any, Dict
 
 class Config:
@@ -10,8 +11,9 @@ class Config:
     """
     def __init__(self, config_dict: Dict[str, Any]):
         def parse_value(val):
+            # 字符串处理，逗号分隔但不是路径时转为列表
+            # String handling: split by comma unless path-like
             if isinstance(val, str):
-                # 逗号分隔且不是路径（带/或.视为路径/文件名，不分割）
                 if "," in val and not any(sep in val for sep in ["/", "."]):
                     return [v.strip() for v in val.split(",") if v.strip()]
                 return val.strip()
@@ -26,6 +28,7 @@ class Config:
                 v = parse_value(v)
             setattr(self, k, v)
         # 强制 traits, covariates, models 为列表
+        # Force traits, covariates, models to be list
         if hasattr(self, "gwas"):
             for key in ["traits", "covariates", "models"]:
                 val = getattr(self.gwas, key, None)
@@ -57,12 +60,28 @@ class Config:
         setattr(self, key, value)
 
 def load_yaml(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """
+    加载本地yaml文件
+    Load local yaml file
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        logging.error(f"Failed to load yaml file: {os.path.basename(path)}. Please check the file format and path.")
+        raise RuntimeError("Failed to load yaml file. Please check your config file.") from None
 
 def load_yaml_from_package(package, resource):
-    with importlib.resources.open_text(package, resource, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """
+    从包资源加载yaml文件
+    Load yaml file from package resource
+    """
+    try:
+        with importlib.resources.open_text(package, resource, encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        logging.error(f"Failed to load default config from package resource: {resource}.")
+        raise RuntimeError("Failed to load default config. Please reinstall the package or check resources.") from None
 
 def deep_update(d, u):
     # 递归合并字典
@@ -82,17 +101,29 @@ def load_config(default_path=None, user_path=None, cli_args=None, default_pkg=No
     返回Config对象 / Return Config object
     """
     # 1. 加载默认配置 / Load default config
-    if default_pkg and default_file:
-        config = load_yaml_from_package(default_pkg, default_file)
-    elif default_path:
-        config = load_yaml(default_path)
-    else:
-        raise ValueError("No default config source specified")
+    try:
+        if default_pkg and default_file:
+            config = load_yaml_from_package(default_pkg, default_file)
+        elif default_path:
+            config = load_yaml(default_path)
+        else:
+            logging.error("No default config source specified.")
+            raise RuntimeError("No default config source specified.")
+    except Exception as e:
+        logging.error("Failed to load default configuration.")
+        raise RuntimeError("Failed to load default configuration.") from None
 
     # 2. 加载用户自定义配置（如有）/ Load user config if provided
-    if user_path and os.path.isfile(user_path):
-        user_cfg = load_yaml(user_path)
-        config = deep_update(config, user_cfg)
+    if user_path:
+        if os.path.isfile(user_path):
+            try:
+                user_cfg = load_yaml(user_path)
+                config = deep_update(config, user_cfg)
+            except Exception:
+                logging.error("Failed to load user config file. Please check your config file.")
+                raise RuntimeError("Failed to load user config file. Please check your config file.") from None
+        else:
+            logging.warning(f"User config file not found: {user_path}. Using default config.")
 
     # 3. 合并命令行参数（如有）/ Merge CLI args if provided
     if cli_args:
@@ -122,17 +153,21 @@ def get_default_cli_options(default_yaml_path_or_func):
     Read yaml config, return flat dict of all parameters and default values
     用于cli.py自动生成命令行参数 / Used for auto-generating CLI options in cli.py
     """
-    if callable(default_yaml_path_or_func):
-        path = default_yaml_path_or_func()
-        with open(path, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-    elif isinstance(default_yaml_path_or_func, str) and os.path.isfile(default_yaml_path_or_func):
-        with open(default_yaml_path_or_func, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-    else:
-        # 兼容包内资源
-        pkg, file = "efgh.configs", "default.yaml"
-        with importlib.resources.open_text(pkg, file, encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-    return flatten_yaml_dict(config)
+    try:
+        if callable(default_yaml_path_or_func):
+            path = default_yaml_path_or_func()
+            with open(path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+        elif isinstance(default_yaml_path_or_func, str) and os.path.isfile(default_yaml_path_or_func):
+            with open(default_yaml_path_or_func, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+        else:
+            # 兼容包内资源 / Compatible with package resource
+            pkg, file = "efgh.configs", "default.yaml"
+            with importlib.resources.open_text(pkg, file, encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+        return flatten_yaml_dict(config)
+    except Exception:
+        logging.error("Failed to load default CLI options from config.")
+        raise RuntimeError("Failed to load default CLI options from config.") from None
 
