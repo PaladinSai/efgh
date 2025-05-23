@@ -5,14 +5,13 @@ VCF to Zarr module. Uses the bio2zarr CLI tool to convert VCF files to Zarr form
 
 import os
 import subprocess
+import pysam
 
 def create_vcf_index(vcf_path):
     """
     使用pysam为VCF文件生成索引（.tbi），如果已存在则跳过。
     Create index (.tbi) for VCF file using pysam. Skip if already exists.
     """
-    import pysam
-
     # 判断是否为bgzip压缩VCF
     # Check if VCF is bgzip compressed
     if vcf_path.endswith(('.gz', '.bgz')):
