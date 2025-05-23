@@ -1,0 +1,9 @@
+sgkit~=0.10.0
+click~=8.1.8
+pandas~=2.2.3
+numpy~=1.26.4
+PyYAML~=6.0.2
+matplotlib~=3.10.1
+seaborn~=0.13.2
+zarr~=2.18.3
+setuptools~=80.1.0
