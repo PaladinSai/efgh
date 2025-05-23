@@ -14,7 +14,7 @@ qc:
 pca:
   pcs: 3                                             # 主成分分析（PCA）计算的主成分数量
 gwas:
-  traits: CD8, MCH                                    # 需要分析的表型列名，示例：CD8, MCH
+  traits: CD8                                    # 需要分析的表型列名，示例：CD8, MCH
   covariates:                                        # 需要分析的协变量列表（留空则不使用协变量），示例格式：covariates_1,covariates_2
   models: linear_regression                     # 支持 linear_regression, regenie 或两者组合，示例格式：linear_regression, regenie
   manhattan:  #曼哈顿图输出配置

@@ -76,56 +76,51 @@ def run(user_config, **kwargs):
     )
     # Dask并行配置，根据配置文件设置线程池
     cpu_cores = get_cpu_cores(config)
-    cluster = LocalCluster(n_workers=cpu_cores, threads_per_worker=1)
-    client = Client(cluster)
+    with LocalCluster(n_workers=cpu_cores, threads_per_worker=1) as cluster, \
+            Client(cluster) as client:
+        t1 = time.time()
+        step_times["Load config"] = t1 - t0
+        logging.info(f"Step 'Load config' finished in {step_times['Load config']:.2f} seconds.")
 
-    t1 = time.time()
-    step_times["Load config"] = t1 - t0
-    logging.info(f"Step 'Load config' finished in {step_times['Load config']:.2f} seconds.")
+        # 输出配置信息 / Log configuration info
+        logging.info("Configuration loaded. Starting GWAS workflow...")
+        import pprint
+        logging.info("Current configuration:\n" + pprint.pformat(config.to_dict()))
 
-    # 输出配置信息 / Log configuration info
-    logging.info("Configuration loaded. Starting GWAS workflow...")
-    import pprint
-    logging.info("Current configuration:\n" + pprint.pformat(config.to_dict()))
+        # 步骤1：VCF转Zarr / Step 1: VCF to Zarr
+        t0 = time.time()
+        vcz_path = vcf_to_zarr(config)
+        t1 = time.time()
+        step_times["VCF to Zarr"] = t1 - t0
+        logging.info(f"Step 'VCF to Zarr' finished in {step_times['VCF to Zarr']:.2f} seconds.")
 
-    # 步骤1：VCF转Zarr / Step 1: VCF to Zarr
-    t0 = time.time()
-    vcz_path = vcf_to_zarr(config)
-    t1 = time.time()
-    step_times["VCF to Zarr"] = t1 - t0
-    logging.info(f"Step 'VCF to Zarr' finished in {step_times['VCF to Zarr']:.2f} seconds.")
+        # 步骤2：数据处理 / Step 2: Data processing
+        t0 = time.time()
+        ds = run_process(config, vcz_path)
+        t1 = time.time()
+        step_times["process"] = t1 - t0
+        logging.info(f"Step 'process' finished in {step_times['process']:.2f} seconds.")
 
-    # 步骤2：数据处理 / Step 2: Data processing
-    t0 = time.time()
-    ds = run_process(config, vcz_path)
-    t1 = time.time()
-    step_times["process"] = t1 - t0
-    logging.info(f"Step 'process' finished in {step_times['process']:.2f} seconds.")
+        # 步骤3：质量控制 / Step 3: Quality Control
+        t0 = time.time()
+        ds = run_qc(config, ds)
+        t1 = time.time()
+        step_times["QC"] = t1 - t0
+        logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
 
-    # 步骤3：质量控制 / Step 3: Quality Control
-    t0 = time.time()
-    ds = run_qc(config, ds)
-    t1 = time.time()
-    step_times["QC"] = t1 - t0
-    logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
+        # 步骤4：PCA分析 / Step 4: PCA
+        t0 = time.time()
+        ds = run_pca(config, ds)
+        t1 = time.time()
+        step_times["PCA"] = t1 - t0
+        logging.info(f"Step 'PCA' finished in {step_times['PCA']:.2f} seconds.")
 
-    # 步骤4：PCA分析 / Step 4: PCA
-    t0 = time.time()
-    ds = run_pca(config, ds)
-    t1 = time.time()
-    step_times["PCA"] = t1 - t0
-    logging.info(f"Step 'PCA' finished in {step_times['PCA']:.2f} seconds.")
-
-    # 步骤5：GWAS分析 / Step 5: GWAS
-    t0 = time.time()
-    ds_lr = run_gwas(ds, config)
-    t1 = time.time()
-    step_times["GWAS"] = t1 - t0
-    logging.info(f"Step 'GWAS' finished in {step_times['GWAS']:.2f} seconds.")
-
-    # 步骤6：关闭dask集群 / Step 6: Close Dask cluster
-    client.close()
-    cluster.close()
+        # 步骤5：GWAS分析 / Step 5: GWAS
+        t0 = time.time()
+        ds_lr = run_gwas(ds, config)
+        t1 = time.time()
+        step_times["GWAS"] = t1 - t0
+        logging.info(f"Step 'GWAS' finished in {step_times['GWAS']:.2f} seconds.")
     total_end = time.time()
     logging.info(f"Total time: {total_end - total_start:.2f} seconds")
 

@@ -3,7 +3,7 @@ import sgkit as sg
 import pandas as pd
 import numpy as np
 import logging
-from .plotting import manhattan_plot, qq_plot
+from .plotting import manhattan_plot, manhattan_plot_chunked, qq_plot
 
 def run_gwas(ds, config, chunk_size=10000):
     """
@@ -62,7 +62,7 @@ def run_gwas(ds, config, chunk_size=10000):
                 logging.error("Failed to run linear regression GWAS. Please check your input data and configuration.")
                 raise RuntimeError("Failed to run linear regression GWAS.") from None
 
-            n_variants = ds_lr.dims["variants"]
+            n_variants = ds_lr.sizes["variants"]
             for i, trait in enumerate(traits):
                 gwas_lr_results_path = os.path.join(config.output.outdir, f"gwas_results_linear_regression_{trait}.csv")
                 header_written = False
@@ -105,7 +105,8 @@ def run_gwas(ds, config, chunk_size=10000):
                 logging.info(f"GWAS results saved to: {gwas_lr_results_path}")
                 logging.info("Generating Manhattan plot...")
                 try:
-                    manhattan_plot(ds_lr, config, trait, i)
+                    # manhattan_plot(ds_lr, config, trait, i)
+                    manhattan_plot_chunked(ds_lr, config, trait, i, chunk_size=10000)
                     logging.info("Manhattan plot generated.")
                 except Exception:
                     logging.error("Failed to generate Manhattan plot.")

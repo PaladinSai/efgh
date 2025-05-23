@@ -153,7 +153,7 @@ def flatten_yaml_dict(d, prefix=""):
 
 def get_default_cli_options(default_yaml_path_or_func):
     """
-    读取yaml配置，��回所有参数的扁平字典及默认值
+    读取yaml配置，返回所有参数的扁平字典及默认值
     Read yaml config, return flat dict of all parameters and default values
     用于cli.py自动生成命令行参数 / Used for auto-generating CLI options in cli.py
     """
@@ -183,7 +183,7 @@ def get_cpu_cores(config):
     cpu_cores = getattr(config, "cpu_cores", 10)
     try:
         cpu_cores = int(cpu_cores)
-        if cpu_cores < 1:
+        if (cpu_cores < 1):
             cpu_cores = 1
     except Exception:
         cpu_cores = 10
