@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "efgh"
 version = "0.1.0"
 description = "A GWAS workflow tool"
-authors = [{name = "Ming", email = "paladinsai@gmail.com"}]
+authors = [{name = "ZhuKun", email = "zc19981023@gmail.com"}]
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.10"

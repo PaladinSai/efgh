@@ -1,9 +1,9 @@
 input:
-  vcf_path: "./data/mouse_hs1940.vcf.gz"  # VCF或VCF.GZ基因型文件路径（相对于项目根目录）
-  pheno_path: "./data/mouse_hs1940.csv"  # 表型CSV文件路径（相对于项目根目录）
+  vcf_path: ./data/mouse_hs1940.vcf.gz  # VCF或VCF.GZ基因型文件路径（相对于项目根目录）
+  pheno_path: ./data/mouse_hs1940.csv  # 表型CSV文件路径（相对于项目根目录）
 
 output:
-  outdir: "./results"                                # 输出目录（相对于项目根目录）
+  outdir: ./results                                # 输出目录（相对于项目根目录）
 
 qc:
   maf: 0.01                                          # 最小等位基因频率（MAF）过滤阈值
@@ -13,9 +13,9 @@ qc:
 pca:
   pcs: 3                                             # 主成分分析（PCA）计算的主成分数量
 gwas:
-  traits: ["CD8"]                                    # 需要分析的表型列名["CD8", "MCH"]
-  covariates:                                        # 需要分析的协变量列表（留空则不使用协变量），示例格式：["covariates_1","covariates_2"]
-  models: ["linear_regression"]                      # 支持 ["linear_regression", "regenie"] 或两者组合
+  traits: CD8, MCH                                    # 需要分析的表型列名，示例：CD8, MCH
+  covariates:                                        # 需要分析的协变量列表（留空则不使用协变量），示例格式：covariates_1,covariates_2
+  models: linear_regression                     # 支持 linear_regression, regenie 或两者组合，示例格式：linear_regression, regenie
   manhattan:  #曼哈顿图输出配置
     chrom_colors: ["#1f77b4", "#ff7f0e"]  # 染色体交替颜色
     threshold_lines:  #阈值线

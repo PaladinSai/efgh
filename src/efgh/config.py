@@ -8,10 +8,32 @@ class Config:
     Class for storing and managing all configuration parameters, supports attribute and dict access.
     """
     def __init__(self, config_dict: Dict[str, Any]):
+        def parse_value(val):
+            if isinstance(val, str):
+                # 逗号分隔且不是路径（带/或.视为路径/文件名，不分割）
+                if "," in val and not any(sep in val for sep in ["/", "."]):
+                    return [v.strip() for v in val.split(",") if v.strip()]
+                return val.strip()
+            elif isinstance(val, dict):
+                return Config(val)
+            return val
+
         for k, v in config_dict.items():
             if isinstance(v, dict):
                 v = Config(v)
+            else:
+                v = parse_value(v)
             setattr(self, k, v)
+        # 强制 traits, covariates, models 为列表
+        if hasattr(self, "gwas"):
+            for key in ["traits", "covariates", "models"]:
+                val = getattr(self.gwas, key, None)
+                if val is None or val == "":
+                    setattr(self.gwas, key, [])
+                elif isinstance(val, str):
+                    setattr(self.gwas, key, [val])
+                elif not isinstance(val, list):
+                    setattr(self.gwas, key, list(val))
         self._dict = config_dict
 
     def to_dict(self):

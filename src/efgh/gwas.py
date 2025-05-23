@@ -36,10 +36,7 @@ def run_gwas(ds, config, chunk_size=10000):
     for cov in covariates:
         assert cov in ds, f"{cov} not in dataset"
 
-    # 支持单个字符串或列表
     models = config.gwas.models
-    if isinstance(models, str):
-        models = [models]
 
     for model in models:
         print(f"Running GWAS model: {model} ...")
