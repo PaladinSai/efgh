@@ -8,7 +8,7 @@ import logging
 
 def manhattan_plot(ds_lr, config, trait, trait_idx):
     """
-    绘制Manhattan图，用于展示GWAS结果。
+    绘制Manhattan图，用于展示GWAS结果。由于有内存溢出问题，暂不使用。
     Draw Manhattan plot for GWAS results.
     """
     try:
@@ -91,7 +91,7 @@ def manhattan_plot(ds_lr, config, trait, trait_idx):
         logging.error("Failed to generate Manhattan plot.")
         # 不抛出异常，继续流程 / Do not raise, just log
 
-def manhattan_plot_chunked(ds_lr, config, trait, trait_idx, chunk_size=10000):
+def manhattan_plot_chunked(ds_lr, config, trait, trait_idx, chunk_size=None):
     """
     低内存分块流式绘制Manhattan图，适合xarray+zarr大数据。不刷Dask run_spec警告。
     """
@@ -104,6 +104,8 @@ def manhattan_plot_chunked(ds_lr, config, trait, trait_idx, chunk_size=10000):
         point_colors = getattr(man_cfg, "point_colors", {}) if man_cfg else {}
         color_above = getattr(point_colors, "above", "#d62728")
         color_between = getattr(point_colors, "between", "#2ca02c")
+        if chunk_size is None:
+            chunk_size = getattr(getattr(config, "performance", None), "chunk_size", 10000)
 
         # 1. 获取基础信息（直接dask array，不要xarray DataArray）
         contig = ds_lr["variant_contig"].data
@@ -236,21 +238,3 @@ def qq_plot(ds_lr, config, trait, trait_idx):
     except Exception:
         logging.error("Failed to generate QQ plot.")
         # 不抛出异常，继续流程 / Do not raise, just log
-
-def plot_manhattan_and_qq_mp(ds_lr, config, trait, trait_idx):
-    """
-    多进程绘制Manhattan图和QQ图。
-    Draw Manhattan and QQ plots for GWAS results in a subprocess.
-    """
-    try:
-        # 子进程可单独设置日志格式，避免日志混乱
-        logging.basicConfig(
-            level=logging.INFO,
-            format=f'[%(process)d][%(asctime)s] %(levelname)s: %(message)s'
-        )
-        logging.info(f"Start plotting for trait: {trait} (index={trait_idx})")
-        manhattan_plot_chunked(ds_lr, config, trait, trait_idx, chunk_size=10000)
-        qq_plot(ds_lr, config, trait, trait_idx)
-        logging.info(f"Plots for trait: {trait} finished.")
-    except Exception as e:
-        logging.error(f"Plotting failed for trait {trait}: {e}")

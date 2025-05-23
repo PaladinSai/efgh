@@ -1,4 +1,6 @@
-cpu_cores: 10  # 用于VCF转Zarr等多进程任务的CPU核心数 / Number of CPU cores for VCF to Zarr and other multi-process tasks
+performance:
+  cpu_cores: 8  # 用于VCF转Zarr等多进程任务的CPU核心数 / Number of CPU cores for VCF to Zarr and other multi-process tasks
+  chunk_size: 10000 # 输出数据时的分块大小，避免内存溢出的问题 / Chunk size for output data to avoid memory overflow
 input:
   vcf_path: ./data/mouse_hs1940.vcf.gz  # VCF或VCF.GZ基因型文件路径（相对于项目根目录）
   pheno_path: ./data/mouse_hs1940.csv  # 表型CSV文件路径（相对于项目根目录）

@@ -39,10 +39,10 @@ class Config:
                 elif not isinstance(val, list):
                     setattr(self.gwas, key, list(val))
         self._dict = config_dict
-        # 支持cpu_cores参数，若未设置则默认为10
-        # Support cpu_cores parameter, default to 10 if not set
-        if not hasattr(self, "cpu_cores"):
-            self.cpu_cores = config_dict.get("cpu_cores", 10)
+        # 支持cpu_cores参数，若未设置则默认为8
+        # Support cpu_cores parameter, default to 8 if not set
+        if hasattr(self, "performance") and not hasattr(self.performance, "cpu_cores"):
+            self.performance.cpu_cores = 8
 
     def to_dict(self):
         # 递归转换为普通字典
@@ -177,14 +177,14 @@ def get_default_cli_options(default_yaml_path_or_func):
 
 def get_cpu_cores(config):
     """
-    获取CPU核心数，默认10，小于1自动设为1
-    Get CPU core count, default 10, set to 1 if less than 1
+    获取CPU核心数，默认8，小于1自动设为1
+    Get CPU core count, default 8, set to 1 if less than 1
     """
-    cpu_cores = getattr(config, "cpu_cores", 10)
+    cpu_cores = getattr(getattr(config, "performance", None), "cpu_cores", 8)
     try:
         cpu_cores = int(cpu_cores)
-        if (cpu_cores < 1):
+        if cpu_cores < 1:
             cpu_cores = 1
     except Exception:
-        cpu_cores = 10
+        cpu_cores = 8
     return cpu_cores

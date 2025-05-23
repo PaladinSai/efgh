@@ -5,25 +5,25 @@ import numpy as np
 import logging
 from .plotting import manhattan_plot, manhattan_plot_chunked, qq_plot
 
-def run_gwas(ds, config, chunk_size=10000):
+def run_gwas(ds, config):
     """
     执行GWAS分析，使用sgkit进行基因组关联分析。
     Run GWAS analysis using sgkit.
     """
     # 创建输出目录（如果不存在）
-    # Create output directory if it does not exist
     try:
         os.makedirs(config.output.outdir, exist_ok=True)
     except Exception:
         logging.error("Failed to create output directory. Please check your output path settings.")
         raise RuntimeError("Failed to create output directory.") from None
 
+    # 从配置文件中读取分块大小
+    chunk_size = getattr(getattr(config, "performance", None), "chunk_size", 10000)
+
     # 从配置文件中读取性状列
-    # Read trait column from config
     traits = config.gwas.traits
 
     # 组合自定义协变量和PCA主成分
-    # Combine user covariates and PCA principal components
     user_covariates = getattr(config.gwas, "covariates", None)
     if user_covariates and len(user_covariates) > 0:
         if isinstance(user_covariates, str):
@@ -31,10 +31,9 @@ def run_gwas(ds, config, chunk_size=10000):
     else:
         user_covariates = []
     pca_covariates = [f"sample_pca_projection_{i}" for i in range(config.pca.pcs)]
-    covariates = list(dict.fromkeys(user_covariates + pca_covariates))  # 保持顺序去重 / keep order and deduplicate
+    covariates = list(dict.fromkeys(user_covariates + pca_covariates))  # 保持顺序去重
 
     # 去除性状列和协变量列的空值
-    # Remove samples with missing trait or covariate values
     mask = np.ones(ds.sizes["samples"], dtype=bool)
     for col in list(traits) + list(covariates):
         mask &= ~ds[col].isnull().values
@@ -54,33 +53,49 @@ def run_gwas(ds, config, chunk_size=10000):
                 ds_lr = sg.gwas_linear_regression(
                     ds,
                     add_intercept=True,
-                    dosage='call_dosage',  # 剂量变量名称 / dosage variable name
-                    covariates=covariates,  # 协变量名称列表 / list of covariate names
-                    traits=traits  # 性状变量名称 / trait variable name
+                    dosage='call_dosage',
+                    covariates=covariates,
+                    traits=traits
                 )
             except Exception:
                 logging.error("Failed to run linear regression GWAS. Please check your input data and configuration.")
                 raise RuntimeError("Failed to run linear regression GWAS.") from None
 
             n_variants = ds_lr.sizes["variants"]
+
+            # 预先以 dask array 提取所有变量，避免 run_spec 警告
+            contig_name_da = ds_lr['variant_contig_name'].data
+            pos_da = ds_lr['variant_position'].data
+            alleles_da = ds_lr['variant_allele'].data
+            call_dosage_da = ds_lr['call_dosage'].data
+            beta_da = ds_lr['variant_linreg_beta'].data
+            t_stat_da = ds_lr['variant_linreg_t_value'].data
+            p_value_da = ds_lr['variant_linreg_p_value'].data
+
+            n = ds_lr.sizes['samples']
+
             for i, trait in enumerate(traits):
                 gwas_lr_results_path = os.path.join(config.output.outdir, f"gwas_results_linear_regression_{trait}.csv")
+                # 分析前若文件已存在则删除，防止重复写入
+                if os.path.exists(gwas_lr_results_path):
+                    os.remove(gwas_lr_results_path)
                 header_written = False
+                # trait变量y一次性load（假设样本数不大）
+                y = ds[trait].values
                 for start in range(0, n_variants, chunk_size):
                     end = min(start + chunk_size, n_variants)
-                    chr_ = ds_lr['variant_contig_name'].values[start:end]
-                    pos = ds_lr['variant_position'].values[start:end]
+                    idx = slice(start, end)
+                    chr_ = contig_name_da[idx].compute()
+                    pos = pos_da[idx].compute()
                     locus = [f"{c}:{p}" for c, p in zip(chr_, pos)]
-                    alleles = ds_lr['variant_allele'].values[start:end]
+                    alleles = alleles_da[idx].compute()
                     alleles_str = [str(list(a)) for a in alleles]
-                    n = ds_lr.sizes['samples']
-                    call_dosage = ds_lr['call_dosage'].values[start:end]
+                    call_dosage = call_dosage_da[idx].compute()
                     sum_x = np.nansum(call_dosage, axis=1)
-                    y = ds[trait].values
                     y_transpose_x = np.nansum(call_dosage * y, axis=1)
-                    beta = ds_lr['variant_linreg_beta'][start:end, 0].values
-                    t_stat = ds_lr['variant_linreg_t_value'][start:end, 0].values
-                    p_value = ds_lr['variant_linreg_p_value'][start:end, 0].values
+                    beta = beta_da[idx, i].compute()
+                    t_stat = t_stat_da[idx, i].compute()
+                    p_value = p_value_da[idx, i].compute()
                     df = pd.DataFrame({
                         "locus": locus,
                         "alleles": alleles_str,
@@ -105,8 +120,7 @@ def run_gwas(ds, config, chunk_size=10000):
                 logging.info(f"GWAS results saved to: {gwas_lr_results_path}")
                 logging.info("Generating Manhattan plot...")
                 try:
-                    # manhattan_plot(ds_lr, config, trait, i)
-                    manhattan_plot_chunked(ds_lr, config, trait, i, chunk_size=10000)
+                    manhattan_plot_chunked(ds_lr, config, trait, i, chunk_size=chunk_size)
                     logging.info("Manhattan plot generated.")
                 except Exception:
                     logging.error("Failed to generate Manhattan plot.")
@@ -124,6 +138,8 @@ def run_gwas(ds, config, chunk_size=10000):
                 raise RuntimeError("Failed to run regenie GWAS.") from None
             for i, trait in enumerate(traits):
                 gwas_rg_results_path = os.path.join(config.output.outdir, f"gwas_results_regenie_{trait}.csv")
+                if os.path.exists(gwas_rg_results_path):
+                    os.remove(gwas_rg_results_path)
                 meta_pred = ds_rg['regenie_meta_prediction'].values
                 df = pd.DataFrame({
                     "sample": ds.samples.values,
@@ -138,4 +154,3 @@ def run_gwas(ds, config, chunk_size=10000):
         else:
             logging.error(f"Unknown GWAS model: {model}")
             raise RuntimeError(f"Unknown GWAS model: {model}")
-
