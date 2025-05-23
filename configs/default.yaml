@@ -1,10 +1,9 @@
 input:
-  vcf_path: "./data/mouse_hs1940.vcf.gz"  # VCF或VCF.GZ基因型文件路径（相对于项目根目录） 1kg.vcf.bgz
-  pheno_path: "./data/mouse_hs1940.csv"  # 表型CSV文件路径（相对于项目根目录） 1kg_annotations.txt
+  vcf_path: "./data/mouse_hs1940.vcf.gz"  # VCF或VCF.GZ基因型文件路径（相对于项目根目录）
+  pheno_path: "./data/mouse_hs1940.csv"  # 表型CSV文件路径（相对于项目根目录）
 
 output:
   outdir: "./results"                                # 输出目录（相对于项目根目录）
-  result_path: ""                                    # 关联分析结果输出路径（可选）
 
 qc:
   maf: 0.01                                          # 最小等位基因频率（MAF）过滤阈值
@@ -17,16 +16,16 @@ gwas:
   traits: ["CD8"]                                    # 需要分析的表型列名["CD8", "MCH"]
   covariates:                                        # 需要分析的协变量列表（留空则不使用协变量），示例格式：["covariates_1","covariates_2"]
   models: ["linear_regression"]                      # 支持 ["linear_regression", "regenie"] 或两者组合
-  manhattan:
+  manhattan:  #曼哈顿图输出配置
     chrom_colors: ["#1f77b4", "#ff7f0e"]  # 染色体交替颜色
-    threshold_lines:
-      - value: 5
+    threshold_lines:  #阈值线
+      - value: 5 # 默认一条黑色实线，在Y轴5的位置上
         style: solid
         color: "#000000"
-      - value: 10
-        style: dashed
-        color: "#000000"
-    point_colors:
+#      - value: 10 # 最多支持两条阈值线
+#        style: dashed
+#        color: "#000000"
+    point_colors: # 点的颜色
       below: "#1f77b4"
       above: "#d62728"
       between: "#2ca02c"
