@@ -93,7 +93,7 @@ def manhattan_plot(ds_lr, config, trait, trait_idx):
 
 def manhattan_plot_chunked(ds_lr, config, trait, trait_idx, chunk_size=10000):
     """
-    分块绘制Manhattan图，适合大数据量。
+    低内存分块流式绘制Manhattan图，适合xarray+zarr大数据。不刷Dask run_spec警告。
     """
     try:
         man_cfg = getattr(config.gwas, "manhattan", None)
@@ -105,62 +105,90 @@ def manhattan_plot_chunked(ds_lr, config, trait, trait_idx, chunk_size=10000):
         color_above = getattr(point_colors, "above", "#d62728")
         color_between = getattr(point_colors, "between", "#2ca02c")
 
-        contig = ds_lr["variant_contig"].values  # int, shape=(n_variant,)
-        contig_name_arr = ds_lr["variant_contig_name"].values  # str, shape=(n_variant,)
-        pos = ds_lr["variant_position"].values
-        pval = ds_lr["variant_linreg_p_value"][:, trait_idx].values
-        log_pval = -np.log10(pval)
+        # 1. 获取基础信息（直接dask array，不要xarray DataArray）
+        contig = ds_lr["variant_contig"].data
+        pos = ds_lr["variant_position"].data
+        contig_name_arr = ds_lr["variant_contig_name"].data
+        pval = ds_lr["variant_linreg_p_value"][:, trait_idx].data
 
-        unique_contigs = np.unique(contig)
+        n = ds_lr.sizes.get("variants") or ds_lr.dims.get("variants")
+
+        # 2. 统计unique contig及offsets和tick label
         offsets = {}
-        running_offset = 0
         tick_pos = []
         tick_label = []
-        for c in unique_contigs:
-            idx = np.where(contig == c)[0]
-            if idx.size == 0:
-                continue
-            offsets[c] = running_offset
-            tick_pos.append((pos[idx].min() + pos[idx].max()) // 2 + running_offset)
-            tick_label.append(str(contig_name_arr[idx[0]]))  # 取第一个即可
-            running_offset += pos[idx].max()
+        running_offset = 0
 
-        n = len(pos)
+        # 2.1 找出unique_contigs及每个contig的第一个索引
+        contig_first_idx = {}
+        unique_contigs = []
+        for start in range(0, n, chunk_size):
+            idx = slice(start, min(start + chunk_size, n))
+            contig_chunk = contig[idx].compute()
+            for i, c in enumerate(contig_chunk):
+                if c not in contig_first_idx:
+                    contig_first_idx[c] = start + i
+                    unique_contigs.append(c)
+        unique_contigs = sorted(unique_contigs)
+
+        # 2.2 统计offsets和tick
+        for c in unique_contigs:
+            max_pos = 0
+            min_pos = None
+            for start in range(0, n, chunk_size):
+                idx = slice(start, min(start + chunk_size, n))
+                contig_chunk = contig[idx].compute()
+                pos_chunk = pos[idx].compute()
+                mask = contig_chunk == c
+                if np.any(mask):
+                    max_pos = max(max_pos, pos_chunk[mask].max())
+                    _min = pos_chunk[mask].min()
+                    min_pos = _min if min_pos is None else min(min_pos, _min)
+            offsets[c] = running_offset
+            tick_pos.append((min_pos + max_pos) // 2 + running_offset)
+            idx0 = contig_first_idx[c]
+            tick_label.append(str(contig_name_arr[idx0].compute().item()))
+            running_offset += max_pos
+
+        # 3. 分块绘图
         fig, ax = plt.subplots(figsize=(16, 6))
         for start in range(0, n, chunk_size):
-            end = min(start + chunk_size, n)
-            contig_chunk = contig[start:end]
-            pos_chunk = pos[start:end]
-            log_pval_chunk = log_pval[start:end]
-            cumulative_pos_chunk = np.array([pos_chunk[i] + offsets[contig_chunk[i]] for i in range(len(pos_chunk))])
+            idx = slice(start, min(start + chunk_size, n))
+            contig_chunk = contig[idx].compute()
+            pos_chunk = pos[idx].compute()
+            pval_chunk = pval[idx].compute()
+            log_pval_chunk = -np.log10(pval_chunk)
+            cumulative_pos_chunk = np.array([pos_chunk[j] + offsets[contig_chunk[j]] for j in range(len(pos_chunk))])
             for i, c in enumerate(unique_contigs):
-                idx = np.where(contig_chunk == c)[0]
-                if idx.size == 0:
+                ind = np.where(contig_chunk == c)[0]
+                if ind.size == 0:
                     continue
                 thresholds = sorted([line["value"] for line in threshold_lines])
                 if len(thresholds) == 1:
-                    cat = np.where(log_pval_chunk[idx] >= thresholds[0], "above", "below")
+                    cat = np.where(log_pval_chunk[ind] >= thresholds[0], "above", "below")
                 elif len(thresholds) == 2:
                     t1, t2 = thresholds
-                    cat = np.full(idx.shape, "below", dtype=object)
-                    cat[log_pval_chunk[idx] >= t1] = "between"
-                    cat[log_pval_chunk[idx] >= t2] = "above"
+                    cat = np.full(ind.shape, "below", dtype=object)
+                    cat[log_pval_chunk[ind] >= t1] = "between"
+                    cat[log_pval_chunk[ind] >= t2] = "above"
                 else:
-                    cat = np.full(idx.shape, "below", dtype=object)
+                    cat = np.full(ind.shape, "below", dtype=object)
                 for cat_name, color in [("below", chrom_colors[i % len(chrom_colors)]),
                                         ("above", color_above),
                                         ("between", color_between)]:
-                    sub_idx = idx[cat == cat_name]
+                    sub_idx = ind[cat == cat_name]
                     if sub_idx.size > 0:
                         ax.scatter(cumulative_pos_chunk[sub_idx], log_pval_chunk[sub_idx],
                                    c=color, s=10, label=None, alpha=0.8)
 
+        # 4. 阈值线
         for line in threshold_lines:
             y = line.get("value", 5)
             style = line.get("style", "solid")
             color = line.get("color", "#d62728")
             ax.axhline(y, color=color, linestyle="-" if style == "solid" else "--", linewidth=1.5, zorder=0)
 
+        # 5. 轴标签
         ax.set_xticks(tick_pos)
         ax.set_xticklabels(tick_label)
         ax.set_xlabel("Chromosome")
