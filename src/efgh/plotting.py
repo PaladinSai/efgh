@@ -149,7 +149,10 @@ def manhattan_plot_chunked(ds_lr, config, trait, trait_idx, chunk_size=None):
             offsets[c] = running_offset
             tick_pos.append((min_pos + max_pos) // 2 + running_offset)
             idx0 = contig_first_idx[c]
-            tick_label.append(str(contig_name_arr[idx0].compute().item()))
+            val = contig_name_arr[idx0].compute()
+            if hasattr(val, 'item'):
+                val = val.item()
+            tick_label.append(str(val))
             running_offset += max_pos
 
         # 3. 分块绘图
