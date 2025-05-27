@@ -4,6 +4,7 @@ Quality control module, use sgkit to perform QC on zarr file and output QC'ed za
 """
 import sgkit as sg
 import logging
+import dask.array as da
 
 def run_qc(config, ds):
     """
@@ -33,30 +34,23 @@ def run_qc(config, ds):
         logging.info("Calculating variant statistics...")
         ds = sg.variant_stats(ds)
 
+        variant_mask = da.ones(ds.sizes['variants'], dtype=bool)
         # 根据检出率过滤变异位点（变异位点缺失率过滤）/ Filter variants by call rate (missingness)
         if qc_cfg.variant_missing is not None:
             logging.info(f"Filtering variants with call rate less than {qc_cfg.variant_missing} ...")
-            logging.info(f"Variant count before filtering: {ds.sizes['variants']}")
-            variants_missing_filter = (ds.variant_call_rate > (1 - qc_cfg.variant_missing))
-            ds = ds.sel(variants=variants_missing_filter.compute())
-            logging.info(f"Variant count after call rate filtering: {ds.sizes['variants']}")
-
+            variant_mask &= (ds.variant_call_rate > (1 - qc_cfg.variant_missing))
         # 根据 MAF 过滤变异位点 / Filter variants by MAF
         if qc_cfg.maf is not None:
             logging.info("Calculating minor allele frequency (MAF)...")
-            logging.info(f"Variant count before MAF filtering: {ds.sizes['variants']}")
-            maf_filter = (ds.variant_allele_frequency[:, 1] > qc_cfg.maf)
-            ds = ds.sel(variants=maf_filter.compute())
-            logging.info(f"Variant count after MAF filtering: {ds.sizes['variants']}")
-
+            variant_mask &= (ds.variant_allele_frequency[:, 1] > qc_cfg.maf)
         # HWE过滤 / HWE filtering
         if qc_cfg.hwe is not None:
-            logging.info(f"Variant count before HWE filtering: {ds.sizes['variants']}")
-            ds = sg.hardy_weinberg_test(ds)
             logging.info(f"Filtering variants with HWE less than {qc_cfg.hwe} ...")
-            hwe_filter = (ds.variant_hwe_p_value > float(qc_cfg.hwe))
-            ds = ds.sel(variants=hwe_filter.compute())
-            logging.info(f"Variant count after HWE filtering: {ds.sizes['variants']}")
+            ds = sg.hardy_weinberg_test(ds)
+            variant_mask &= (ds.variant_hwe_p_value > float(qc_cfg.hwe))
+        logging.info(f"Variant count before filtering: {ds.sizes['variants']}")
+        ds = ds.sel(variants=variant_mask.compute())
+        logging.info(f"Variant count after filtering: {ds.sizes['variants']}")
 
         logging.info(f"Sample count after QC: {ds.sizes['samples']}")
         logging.info(f"Variant count after QC: {ds.sizes['variants']}")

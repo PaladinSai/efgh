@@ -33,6 +33,7 @@ def run_gwas(ds, config):
     pca_covariates = [f"sample_pca_projection_{i}" for i in range(config.pca.pcs)]
     covariates = list(dict.fromkeys(user_covariates + pca_covariates))  # 保持顺序去重
 
+    logging.info(f"Running GWAS analysis using {traits} traits.")
     # 去除性状列和协变量列的空值
     mask = np.ones(ds.sizes["samples"], dtype=bool)
     for col in list(traits) + list(covariates):

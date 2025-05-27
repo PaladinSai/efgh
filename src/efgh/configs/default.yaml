@@ -1,8 +1,14 @@
 performance:
-  cpu_cores: 8  # 用于VCF转Zarr等多进程任务的CPU核心数 / Number of CPU cores for VCF to Zarr and other multi-process tasks
+  hpc: false  # 是否在高性能计算集群上运行 / Whether to run on a high-performance computing cluster
+  cpu_cores: 8  # CPU核心数 / Number of CPU cores to use
+  memory: 16G  # 内存大小 / Memory size
   chunk_size: 10000 # 输出数据时的分块大小，避免内存溢出的问题 / Chunk size for output data to avoid memory overflow
+  processes: 1
+  walltime: 24:00:00  # 最大运行时间 / Maximum wall time for the job
+  job_extra: ["--exclusive"]
+  jobs: 10
 input:
-  vcf_path: ./data/mouse_hs1940.vcf.gz  # VCF或VCF.GZ基因型文件路径（相对于项目根目录）
+  vcz_path: ./data/mouse_hs1940.vcz  # VCF或VCF.GZ基因型文件路径（相对于项目根目录）
   pheno_path: ./data/mouse_hs1940.csv  # 表型CSV文件路径（相对于项目根目录）
 
 output:

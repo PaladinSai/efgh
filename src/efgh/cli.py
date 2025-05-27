@@ -3,7 +3,7 @@ import time
 import importlib.resources
 import logging
 from .config import load_config, get_default_cli_options, get_cpu_cores
-from .vcf2zarr import vcf_to_zarr
+#from .vcf2zarr import vcf_to_zarr
 from .process import run_process
 from .qc import run_qc
 from .pca import run_pca
@@ -82,12 +82,42 @@ def run(user_config, **kwargs):
     import pprint
     logging.info("Current configuration:\n" + pprint.pformat(config.to_dict()))
 
+    # 根据 performance.hpc 启动 Dask 集群
+    if getattr(getattr(config, "performance", None), "hpc", False):
+        from dask.distributed import Client
+        from dask_jobqueue import SLURMCluster
+        perf = config.performance
+        cpu_cores = get_cpu_cores(config)
+        memory = getattr(getattr(config.performance, "memory", None), "memory", "16GB")
+        processes = getattr(perf, "processes", 1)
+        walltime = getattr(perf, "walltime", "24:00:00")
+        job_extra = getattr(perf, "job_extra", ["--exclusive"])
+        jobs = getattr(perf, "jobs", 10)
+        if isinstance(memory, str):
+            mem_str = memory
+        else:
+            mem_str = "16GB"
+        cluster = SLURMCluster(
+            cores=cpu_cores,
+            memory=mem_str,
+            processes=processes,
+            walltime=walltime,
+            job_extra=job_extra,
+        )
+        cluster.scale(jobs=jobs)
+        client = Client(cluster)
+        logging.info("Dask HPC cluster started.")
+    else:
+        logging.info("HPC cluster not enabled, running in local mode.")
+
     # 步骤1：VCF转Zarr / Step 1: VCF to Zarr
-    t0 = time.time()
-    vcz_path = vcf_to_zarr(config)
-    t1 = time.time()
-    step_times["VCF to Zarr"] = t1 - t0
-    logging.info(f"Step 'VCF to Zarr' finished in {step_times['VCF to Zarr']:.2f} seconds.")
+    # t0 = time.time()
+    # vcz_path = vcf_to_zarr(config)
+    # t1 = time.time()
+    # step_times["VCF to Zarr"] = t1 - t0
+    # logging.info(f"Step 'VCF to Zarr' finished in {step_times['VCF to Zarr']:.2f} seconds.")
+
+    vcz_path = config.input.vcz_path
 
     # 步骤2：数据处理 / Step 2: Data processing
     t0 = time.time()
