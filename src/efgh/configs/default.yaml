@@ -4,8 +4,8 @@ performance:
   memory: 16G  # 内存大小 / Memory size
   chunk_size: 10000 # 输出数据时的分块大小，避免内存溢出的问题 / Chunk size for output data to avoid memory overflow
   processes: 1
-  walltime: 24:00:00  # 最大运行时间 / Maximum wall time for the job
-  job_extra: ["--exclusive"]
+  walltime: 48:00:00  # 最大运行时间 / Maximum wall time for the job
+  job_extra: ["--exclusive"]  # 额外的作业参数 / Additional job parameters, e.g., ["#SBATCH -J efgh", "#SBATCH -p normal", "#SBATCH -e id.error"，"#SBATCH -o id.out"] for exclusive node access
   jobs: 10
 input:
   vcz_path: ./data/mouse_hs1940.vcz  # VCF或VCF.GZ基因型文件路径（相对于项目根目录）

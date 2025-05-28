@@ -102,7 +102,7 @@ def run(user_config, **kwargs):
             memory=mem_str,
             processes=processes,
             walltime=walltime,
-            job_extra=job_extra,
+            job_extra_directives=job_extra,
         )
         cluster.scale(jobs=jobs)
         client = Client(cluster)

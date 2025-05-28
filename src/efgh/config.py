@@ -43,7 +43,14 @@ class Config:
         # Support cpu_cores parameter, default to 8 if not set
         if hasattr(self, "performance") and not hasattr(self.performance, "cpu_cores"):
             self.performance.cpu_cores = 8
-
+        # 修正 walltime 类型
+        if hasattr(self, "performance") and hasattr(self.performance, "walltime"):
+            walltime = self.performance.walltime
+            if isinstance(walltime, int):
+                hours = walltime // 3600
+                minutes = (walltime % 3600) // 60
+                seconds = walltime % 60
+                self.performance.walltime = f"{hours:02}:{minutes:02}:{seconds:02}"
     def to_dict(self):
         # 递归转换为普通字典
         # Recursively convert to plain dict
