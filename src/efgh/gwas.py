@@ -2,8 +2,10 @@ import os
 import sgkit as sg
 import pandas as pd
 import numpy as np
+import dask.array as da
 import logging
 from .plotting import manhattan_plot_chunked, qq_plot
+from .utils import mask_to_numpy_in_chunks
 
 def run_gwas(config, ds):
     """
@@ -34,8 +36,11 @@ def run_gwas(config, ds):
 
     logging.info(f"Running GWAS analysis using {traits} traits.")
     # 去除性状列和协变量列的空值
-    cols = list(traits) + list(covariates)
-    ds = ds.dropna(dim="samples", subset=cols)
+    mask = da.ones(ds.sizes["samples"], dtype=bool)
+    for col in list(traits) + list(covariates):
+        mask &= ~ds[col].isnull()
+    mask_np = mask_to_numpy_in_chunks(mask, chunk_size)
+    ds = ds.sel(samples=mask_np)
 
     for model in models:
         logging.info(f"Running GWAS model: {model} ...")

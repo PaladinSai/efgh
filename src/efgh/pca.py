@@ -26,7 +26,7 @@ def run_pca(config, ds):
         ds_pca = sg.stats.pca.count_call_alternate_alleles(ds)
         variant_mask = (((ds_pca.call_alternate_allele_count < 0).any(dim="samples")) |
                         (ds_pca.call_alternate_allele_count.std(dim="samples") <= 0.0))
-        mask = mask_to_numpy_in_chunks(variant_mask, chunk_size)
+        mask = mask_to_numpy_in_chunks(variant_mask, chunk_size//2)
         ds_pca = ds_pca.sel(variants=~mask)
         ds_pca = sg.pca(ds_pca)
         for i in range(pcs):
@@ -35,4 +35,4 @@ def run_pca(config, ds):
         return ds
     except Exception:
         logging.error("Failed to perform PCA analysis. Please check your input data and configuration.")
-        raise RuntimeError("Failed to perform PCA analysis.") from None
+        raise #RuntimeError("Failed to perform PCA analysis.") from None
