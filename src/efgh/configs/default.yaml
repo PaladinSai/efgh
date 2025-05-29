@@ -3,7 +3,7 @@ performance:
   cpu_cores: 8  # CPU核心数 / Number of CPU cores to use
   memory: 16G  # 内存大小 / Memory size
   chunk_size: 10000 # 输出数据时的分块大小，避免内存溢出的问题 / Chunk size for output data to avoid memory overflow
-  processes: 1
+  processes: 10
   walltime: 48:00:00  # 最大运行时间 / Maximum wall time for the job
   job_extra: ["--exclusive"]  # 额外的作业参数 / Additional job parameters, e.g., ["#SBATCH -J efgh", "#SBATCH -p normal", "#SBATCH -e id.error"，"#SBATCH -o id.out"] for exclusive node access
   jobs: 10

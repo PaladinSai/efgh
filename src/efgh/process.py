@@ -1,8 +1,7 @@
-import sgkit as sg
 import pandas as pd
 import logging
 
-def run_process(config, vcz_path):
+def run_process(config, ds):
     """
     运行数据处理流程，输入zarr，输出处理后的ds。
     Run data processing workflow, input zarr, output processed ds.
@@ -14,12 +13,6 @@ def run_process(config, vcz_path):
     """
     # 从配置对象获取参数 / Get parameters from config object
     pheno_path = config.input.pheno_path
-
-    try:
-        ds = sg.load_dataset(vcz_path)
-    except Exception:
-        logging.error("Failed to load Zarr dataset. Please check your Zarr file path and format.")
-        raise RuntimeError("Failed to load Zarr dataset.") from None
 
     logging.info("Data preprocessing started.")
     ds["variant_contig_name"] = ds.contig_id[ds.variant_contig]
@@ -38,6 +31,7 @@ def run_process(config, vcz_path):
     df.index.name = "samples"
     ds_annotations = df.to_xarray()
     try:
+
         ds = ds.set_index({"samples": "sample_id"})
         ds = ds.merge(ds_annotations, join="left")
         ds = ds.reset_index("samples").reset_coords("samples")

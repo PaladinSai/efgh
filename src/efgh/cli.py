@@ -2,8 +2,8 @@ import click
 import time
 import importlib.resources
 import logging
+import sgkit as sg
 from .config import load_config, get_default_cli_options, get_cpu_cores
-#from .vcf2zarr import vcf_to_zarr
 from .process import run_process
 from .qc import run_qc
 from .pca import run_pca
@@ -119,30 +119,35 @@ def run(user_config, **kwargs):
 
     vcz_path = config.input.vcz_path
 
-    # 步骤2：数据处理 / Step 2: Data processing
+    try:
+        ds = sg.load_dataset(vcz_path)
+    except Exception:
+        logging.error("Failed to load Zarr dataset. Please check your Zarr file path and format.")
+        raise RuntimeError("Failed to load Zarr dataset.") from None
+
+    # 数据处理 /  Data processing
     t0 = time.time()
-    ds = run_process(config, vcz_path)
+    ds = run_process(config, ds)
     t1 = time.time()
     step_times["process"] = t1 - t0
     logging.info(f"Step 'process' finished in {step_times['process']:.2f} seconds.")
 
-    # 步骤3：质量控制 / Step 3: Quality Control
+    # 质量控制 / Quality Control
     t0 = time.time()
     ds = run_qc(config, ds)
     t1 = time.time()
     step_times["QC"] = t1 - t0
     logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
 
-    # 步骤4：PCA分析 / Step 4: PCA
+    # PCA分析 /  PCA
     t0 = time.time()
     ds = run_pca(config, ds)
     t1 = time.time()
     step_times["PCA"] = t1 - t0
     logging.info(f"Step 'PCA' finished in {step_times['PCA']:.2f} seconds.")
-
-    # 步骤5：GWAS分析 / Step 5: GWAS
+    # GWAS分析 / GWAS
     t0 = time.time()
-    ds_lr = run_gwas(ds, config)
+    ds_lr = run_gwas(config, ds)
     t1 = time.time()
     step_times["GWAS"] = t1 - t0
     logging.info(f"Step 'GWAS' finished in {step_times['GWAS']:.2f} seconds.")

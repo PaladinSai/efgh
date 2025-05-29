@@ -3,9 +3,9 @@ import sgkit as sg
 import pandas as pd
 import numpy as np
 import logging
-from .plotting import manhattan_plot, manhattan_plot_chunked, qq_plot
+from .plotting import manhattan_plot_chunked, qq_plot
 
-def run_gwas(ds, config):
+def run_gwas(config, ds):
     """
     执行GWAS分析，使用sgkit进行基因组关联分析。
     Run GWAS analysis using sgkit.
@@ -17,14 +17,13 @@ def run_gwas(ds, config):
         logging.error("Failed to create output directory. Please check your output path settings.")
         raise RuntimeError("Failed to create output directory.") from None
 
-    # 从配置文件中读取分块大小
+    # 从配置文件中读取配置
     chunk_size = getattr(getattr(config, "performance", None), "chunk_size", 10000)
-
-    # 从配置文件中读取性状列
     traits = config.gwas.traits
+    models = config.gwas.models
+    user_covariates = getattr(config.gwas, "covariates", None)
 
     # 组合自定义协变量和PCA主成分
-    user_covariates = getattr(config.gwas, "covariates", None)
     if user_covariates and len(user_covariates) > 0:
         if isinstance(user_covariates, str):
             user_covariates = [user_covariates]
@@ -35,17 +34,8 @@ def run_gwas(ds, config):
 
     logging.info(f"Running GWAS analysis using {traits} traits.")
     # 去除性状列和协变量列的空值
-    mask = np.ones(ds.sizes["samples"], dtype=bool)
-    for col in list(traits) + list(covariates):
-        mask &= ~ds[col].isnull().values
-    ds = ds.sel(samples=mask)
-
-    for cov in covariates:
-        if cov not in ds:
-            logging.error(f"Covariate '{cov}' not found in dataset.")
-            raise RuntimeError(f"Covariate '{cov}' not found in dataset.")
-
-    models = config.gwas.models
+    cols = list(traits) + list(covariates)
+    ds = ds.dropna(dim="samples", subset=cols)
 
     for model in models:
         logging.info(f"Running GWAS model: {model} ...")
@@ -81,7 +71,7 @@ def run_gwas(ds, config):
                 if os.path.exists(gwas_lr_results_path):
                     os.remove(gwas_lr_results_path)
                 header_written = False
-                # trait变量y一次性load（假设样本数不大）
+                # trait变量y一次性load（样本数一般都不大）
                 y = ds[trait].values
                 for start in range(0, n_variants, chunk_size):
                     end = min(start + chunk_size, n_variants)
@@ -132,6 +122,7 @@ def run_gwas(ds, config):
                 except Exception:
                     logging.error("Failed to generate QQ plot.")
         elif model == "regenie":
+            # 这段有点疑问，暂时不提供支持
             try:
                 ds_rg = sg.regenie(ds, add_intercept=True, dosage='call_dosage', covariates=covariates, traits=traits)
             except Exception:
