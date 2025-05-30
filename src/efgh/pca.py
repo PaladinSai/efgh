@@ -31,6 +31,9 @@ def run_pca(config, ds):
         ds_pca = sg.pca(ds_pca)
         for i in range(pcs):
             ds[f"sample_pca_projection_{i}"] = ds_pca.sample_pca_projection[:, i]
+            mask = ~ds[f"sample_pca_projection_{i}"].isnull()
+            mask_np = mask_to_numpy_in_chunks(mask, chunk_size)
+            ds = ds.sel(samples=mask_np)
         logging.info(f"PCA analysis completed. {pcs} principal components added.")
         return ds
     except Exception:

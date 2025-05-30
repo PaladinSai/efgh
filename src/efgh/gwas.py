@@ -37,7 +37,7 @@ def run_gwas(config, ds):
     logging.info(f"Running GWAS analysis using {traits} traits.")
     # 去除性状列和协变量列的空值
     mask = da.ones(ds.sizes["samples"], dtype=bool)
-    for col in list(traits) + list(covariates):
+    for col in list(traits) + list(user_covariates):
         mask &= ~ds[col].isnull()
     mask_np = mask_to_numpy_in_chunks(mask, chunk_size)
     ds = ds.sel(samples=mask_np)

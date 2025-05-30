@@ -16,12 +16,10 @@ def run_process(config, ds):
 
     logging.info("Data preprocessing started.")
     ds["variant_contig_name"] = ds.contig_id[ds.variant_contig]
-
     # 列出所有变量（包括坐标变量）
     # List all variables (including coordinate variables)
     # logging.debug(f"All columns after preprocessing: {list(ds.variables.keys())}")
-
-    logging.info("Loading phenotype file...")
+    logging.info(f"Loading phenotype file from {pheno_path} ...")
     try:
         df = pd.read_csv(pheno_path, sep=",", index_col=0)
     except Exception:
@@ -31,7 +29,6 @@ def run_process(config, ds):
     df.index.name = "samples"
     ds_annotations = df.to_xarray()
     try:
-
         ds = ds.set_index({"samples": "sample_id"})
         ds = ds.merge(ds_annotations, join="left")
         ds = ds.reset_index("samples").reset_coords("samples")
