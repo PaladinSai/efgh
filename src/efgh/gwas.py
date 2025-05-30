@@ -56,6 +56,7 @@ def run_gwas(config, ds):
             except Exception:
                 logging.error("Failed to run linear regression GWAS. Please check your input data and configuration.")
                 raise RuntimeError("Failed to run linear regression GWAS.") from None
+            logging.info("Linear regression GWAS completed successfully. Start saving results...")
 
             n_variants = ds_lr.sizes["variants"]
 
@@ -78,7 +79,7 @@ def run_gwas(config, ds):
                 header_written = False
                 # trait变量y一次性load（样本数一般都不大）
                 y = ds[trait].values
-                for start in range(0, n_variants, chunk_size):
+                for start in range(0, n_variants, chunk_size//2):
                     end = min(start + chunk_size, n_variants)
                     idx = slice(start, end)
                     chr_ = contig_name_da[idx].compute()
@@ -116,7 +117,7 @@ def run_gwas(config, ds):
                 logging.info(f"GWAS results saved to: {gwas_lr_results_path}")
                 logging.info("Generating Manhattan plot...")
                 try:
-                    manhattan_plot_chunked(ds_lr, config, trait, i, chunk_size=chunk_size)
+                    manhattan_plot_chunked(ds_lr, config, trait, i, chunk_size=chunk_size//2)
                     logging.info("Manhattan plot generated.")
                 except Exception:
                     logging.error("Failed to generate Manhattan plot.")
