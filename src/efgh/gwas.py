@@ -1,7 +1,7 @@
 import sgkit as sg
 import logging
 
-def run_gwas(config, process_path, result_path):
+def run_gwas(config, ds, result_path):
     """
     执行GWAS分析，使用sgkit进行基因组关联分析。
     Run GWAS analysis using sgkit.
@@ -21,8 +21,6 @@ def run_gwas(config, process_path, result_path):
     pca_covariates = [f"sample_pca_projection_{i}" for i in range(config.pca.pcs)]
     covariates = list(dict.fromkeys(user_covariates + pca_covariates))  # 保持顺序去重
 
-    ds = sg.load_dataset(process_path)
-
     for model in models:
         logging.info(f"Running GWAS model: {model} ...")
         if model == "linear_regression":
@@ -38,7 +36,7 @@ def run_gwas(config, process_path, result_path):
                 sg.save_dataset(ds_lr, result_path,auto_rechunk=True)
             except Exception:
                 logging.error("Failed to run linear regression GWAS. Please check your input data and configuration.")
-                raise #RuntimeError("Failed to run linear regression GWAS.") from None
+                raise RuntimeError("Failed to run linear regression GWAS.") from None
             logging.info("Linear regression GWAS completed successfully")
         # elif model == "regenie":
         #     # 这段有点疑问，暂时不提供支持

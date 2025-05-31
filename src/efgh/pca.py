@@ -5,6 +5,7 @@ PCA analysis module, perform PCA on dataset using sgkit.
 
 import sgkit as sg
 import logging
+from .utils import mask_to_numpy_in_chunks
 
 def run_pca(config, ds):
     """
@@ -18,18 +19,22 @@ def run_pca(config, ds):
     """
     try:
         pcs = config.pca.pcs
-        logging.info(f"Running PCA analysis with {pcs} principal components...")
+        chunk_size = getattr(getattr(config, "performance", None), "chunk_size", 10000)
+
         # 计算等位基因计数
         # Calculate alternate allele counts
         ds_pca = sg.stats.pca.count_call_alternate_alleles(ds)
         variant_mask = (((ds_pca.call_alternate_allele_count < 0).any(dim="samples")) |
-                        (ds_pca.call_alternate_allele_count.std(dim="samples") <= 0.0)).compute()
-        ds_pca = ds_pca.sel(variants=~variant_mask)
+                        (ds_pca.call_alternate_allele_count.std(dim="samples") <= 0.0))
+        mask = mask_to_numpy_in_chunks(variant_mask, chunk_size//2)
+        ds_pca = ds_pca.sel(variants=~mask)
         ds_pca = sg.pca(ds_pca)
         for i in range(pcs):
             ds[f"sample_pca_projection_{i}"] = ds_pca.sample_pca_projection[:, i]
-            mask = ~ds[f"sample_pca_projection_{i}"].isnull().compute()
-            ds = ds.sel(samples=mask)
+            mask = ~ds[f"sample_pca_projection_{i}"].isnull()
+            mask_np = mask_to_numpy_in_chunks(mask, chunk_size)
+            ds = ds.sel(samples=mask_np)
+        ds.persist()
         logging.info(f"PCA analysis completed. {pcs} principal components added.")
         return ds
     except Exception:

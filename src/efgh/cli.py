@@ -9,8 +9,9 @@ from .merge_phenotype import run_merge
 from .qc import run_qc
 from .pca import run_pca
 from .gwas import run_gwas
-from .process import run_process
+from .preprocess import run_process
 from .result import run_result
+from .process import run_pca_and_gwas
 
 DEFAULT_CONFIG_PKG = "efgh.configs"
 DEFAULT_CONFIG_FILE = "default.yaml"
@@ -125,13 +126,6 @@ def run(user_config, **kwargs):
         step_times["QC"] = t1 - t0
         logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
 
-        # PCA分析 /  PCA
-        t0 = time.time()
-        ds = run_pca(config, ds)
-        t1 = time.time()
-        step_times["PCA"] = t1 - t0
-        logging.info(f"Step 'PCA' finished in {step_times['PCA']:.2f} seconds.")
-
         # 数据处理
         t0 = time.time()
         run_process(config, ds, process_path)
@@ -142,8 +136,6 @@ def run(user_config, **kwargs):
     else:
         logging.info("Data preprocessing completed, proceeding directly to analysis workflow.")
     if not os.path.exists(result_path):
-        # GWAS分析 / GWAS
-        t0 = time.time()
         # 根据 performance.hpc 启动 Dask 集群
         if getattr(getattr(config, "performance", None), "hpc", False):
             from dask.distributed import Client
@@ -169,14 +161,10 @@ def run(user_config, **kwargs):
             cluster.scale(jobs=jobs)
             with Client(cluster) as client:
                 logging.info(f"Dask HPC cluster started with {jobs} jobs, {cpu_cores} cores, and {mem_str} memory per job.")
-                run_gwas(config, process_path, result_path)
-            logging.info("Dask HPC cluster started.")
+                run_pca_and_gwas(config, process_path, result_path, step_times)
         else:
             logging.info("HPC cluster not enabled, running in local mode.")
-            run_gwas(config, process_path, result_path)
-        t1 = time.time()
-        step_times["GWAS"] = t1 - t0
-        logging.info(f"Step 'GWAS' finished in {step_times['GWAS']:.2f} seconds.")
+            run_pca_and_gwas(config, process_path, result_path, step_times)
     else:
         logging.info("GWAS results already exist, skipping analysis step.")
 
