@@ -4,8 +4,6 @@ Quality control module, use sgkit to perform QC on zarr file and output QC'ed za
 """
 import sgkit as sg
 import logging
-import dask.array as da
-from .utils import mask_to_numpy_in_chunks
 
 def run_qc(config, ds):
     """
@@ -17,10 +15,8 @@ def run_qc(config, ds):
     """
     # 从配置对象获取参数 / Get parameters from config object
     qc_cfg = config.qc
-    chunk_size = getattr(getattr(config, "performance", None), "chunk_size", 10000)
 
     try:
-        # 样本过滤可能不是很必要，因为样本值为空的话在gwas计算中没有存在的意义，应该直接删除，是否保留以后再考虑
         # 计算样本统计信息 / Calculate sample statistics
         logging.info("Calculating sample statistics...")
         ds = sg.sample_stats(ds)
@@ -37,25 +33,31 @@ def run_qc(config, ds):
         logging.info("Calculating variant statistics...")
         ds = sg.variant_stats(ds)
 
-        variant_mask = da.ones(ds.sizes['variants'], dtype=bool)
         # 根据检出率过滤变异位点（变异位点缺失率过滤）/ Filter variants by call rate (missingness)
         if qc_cfg.variant_missing is not None:
             logging.info(f"Filtering variants with call rate less than {qc_cfg.variant_missing} ...")
-            variant_mask &= (ds.variant_call_rate > (1 - qc_cfg.variant_missing))
+            logging.info(f"Variant count before filtering: {ds.sizes['variants']}")
+            variants_missing_filter = (ds.variant_call_rate > (1 - qc_cfg.variant_missing))
+            ds = ds.sel(variants=variants_missing_filter.compute())
+            logging.info(f"Variant count after call rate filtering: {ds.sizes['variants']}")
+
         # 根据 MAF 过滤变异位点 / Filter variants by MAF
         if qc_cfg.maf is not None:
             logging.info("Calculating minor allele frequency (MAF)...")
-            variant_mask &= (ds.variant_allele_frequency[:, 1] > qc_cfg.maf)
+            logging.info(f"Variant count before MAF filtering: {ds.sizes['variants']}")
+            maf_filter = (ds.variant_allele_frequency[:, 1] > qc_cfg.maf)
+            ds = ds.sel(variants=maf_filter.compute())
+            logging.info(f"Variant count after MAF filtering: {ds.sizes['variants']}")
+
         # HWE过滤 / HWE filtering
         if qc_cfg.hwe is not None:
-            logging.info(f"Filtering variants with HWE less than {qc_cfg.hwe} ...")
+            logging.info(f"Variant count before HWE filtering: {ds.sizes['variants']}")
             ds = sg.hardy_weinberg_test(ds)
-            variant_mask &= (ds.variant_hwe_p_value > float(qc_cfg.hwe))
-        logging.info(f"Variant count before filtering: {ds.sizes['variants']}")
-        mask = mask_to_numpy_in_chunks(variant_mask, chunk_size)
-        ds = ds.sel(variants=mask)
-        #ds = ds.where(variant_mask) 这个方案PCA的时候会报错，因为where会把需要删除的数据改成NAN，导致PCA计算时维度不匹配，这个问题后续可以等bio2zarr的接口到了，在数据转换阶段就进行QC的时候解决一下，因为这样才是最快的方案
-        logging.info(f"Variant count after filtering: {ds.sizes['variants']}")
+            logging.info(f"Filtering variants with HWE less than {qc_cfg.hwe} ...")
+            hwe_filter = (ds.variant_hwe_p_value > float(qc_cfg.hwe))
+            ds = ds.sel(variants=hwe_filter.compute())
+            logging.info(f"Variant count after HWE filtering: {ds.sizes['variants']}")
+
         logging.info(f"Sample count after QC: {ds.sizes['samples']}")
         logging.info(f"Variant count after QC: {ds.sizes['variants']}")
         return ds

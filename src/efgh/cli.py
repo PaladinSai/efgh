@@ -3,11 +3,14 @@ import time
 import importlib.resources
 import logging
 import sgkit as sg
+import os
 from .config import load_config, get_default_cli_options, get_cpu_cores
-from .process import run_process
+from .merge_phenotype import run_merge
 from .qc import run_qc
 from .pca import run_pca
 from .gwas import run_gwas
+from .process import run_process
+from .result import run_result
 
 DEFAULT_CONFIG_PKG = "efgh.configs"
 DEFAULT_CONFIG_FILE = "default.yaml"
@@ -82,33 +85,7 @@ def run(user_config, **kwargs):
     import pprint
     logging.info("Current configuration:\n" + pprint.pformat(config.to_dict()))
 
-    # 根据 performance.hpc 启动 Dask 集群
-    if getattr(getattr(config, "performance", None), "hpc", False):
-        from dask.distributed import Client
-        from dask_jobqueue import SLURMCluster
-        perf = config.performance
-        cpu_cores = get_cpu_cores(config)
-        memory = getattr(getattr(config.performance, "memory", None), "memory", "16GB")
-        processes = getattr(perf, "processes", 1)
-        walltime = getattr(perf, "walltime", "24:00:00")
-        job_extra = getattr(perf, "job_extra", ["--exclusive"])
-        jobs = getattr(perf, "jobs", 10)
-        if isinstance(memory, str):
-            mem_str = memory
-        else:
-            mem_str = "16GB"
-        cluster = SLURMCluster(
-            cores=cpu_cores,
-            memory=mem_str,
-            processes=processes,
-            walltime=walltime,
-            job_extra_directives=job_extra,
-        )
-        cluster.scale(jobs=jobs)
-        client = Client(cluster)
-        logging.info("Dask HPC cluster started.")
-    else:
-        logging.info("HPC cluster not enabled, running in local mode.")
+
 
     # 步骤1：VCF转Zarr / Step 1: VCF to Zarr
     # t0 = time.time()
@@ -118,40 +95,105 @@ def run(user_config, **kwargs):
     # logging.info(f"Step 'VCF to Zarr' finished in {step_times['VCF to Zarr']:.2f} seconds.")
 
     vcz_path = config.input.vcz_path
-
+    temp_path = os.path.join(config.output.outdir, "temp")
     try:
-        ds = sg.load_dataset(vcz_path)
+        os.makedirs(temp_path, exist_ok=True)
     except Exception:
-        logging.error("Failed to load Zarr dataset. Please check your Zarr file path and format.")
-        raise RuntimeError("Failed to load Zarr dataset.") from None
+        logging.error("Failed to create output directory. Please check your output path settings.")
+        raise RuntimeError("Failed to create output directory.") from None
+    process_path = os.path.join(temp_path, "process.vcz")
+    result_path = os.path.join(temp_path, "result.vcz")
 
-    # 数据处理 /  Data processing
-    t0 = time.time()
-    ds = run_process(config, ds)
-    t1 = time.time()
-    step_times["process"] = t1 - t0
-    logging.info(f"Step 'process' finished in {step_times['process']:.2f} seconds.")
+    if not os.path.exists(process_path):
+        try:
+            ds = sg.load_dataset(vcz_path)
+        except Exception:
+            logging.error("Failed to load Zarr dataset. Please check your Zarr file path and format.")
+            raise RuntimeError("Failed to load Zarr dataset.") from None
 
-    # 质量控制 / Quality Control
-    t0 = time.time()
-    ds = run_qc(config, ds)
-    t1 = time.time()
-    step_times["QC"] = t1 - t0
-    logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
+        # 合并表型文件
+        t0 = time.time()
+        ds = run_merge(config, ds)
+        t1 = time.time()
+        step_times["merge"] = t1 - t0
+        logging.info(f"Step 'merge' finished in {step_times['merge']:.2f} seconds.")
 
-    # PCA分析 /  PCA
+        # 质量控制 / Quality Control
+        t0 = time.time()
+        ds = run_qc(config, ds)
+        t1 = time.time()
+        step_times["QC"] = t1 - t0
+        logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
+
+        # PCA分析 /  PCA
+        t0 = time.time()
+        ds = run_pca(config, ds)
+        t1 = time.time()
+        step_times["PCA"] = t1 - t0
+        logging.info(f"Step 'PCA' finished in {step_times['PCA']:.2f} seconds.")
+
+        # 数据处理
+        t0 = time.time()
+        run_process(config, ds, process_path)
+        t1 = time.time()
+        step_times["Process"] = t1 - t0
+        logging.info(f"Data preprocessing completed in {step_times['Process']:.2f} seconds.")
+
+    else:
+        logging.info("Data preprocessing completed, proceeding directly to analysis workflow.")
+    if not os.path.exists(result_path):
+        # GWAS分析 / GWAS
+        t0 = time.time()
+        # 根据 performance.hpc 启动 Dask 集群
+        if getattr(getattr(config, "performance", None), "hpc", False):
+            from dask.distributed import Client
+            from dask_jobqueue import SLURMCluster
+            perf = config.performance
+            cpu_cores = get_cpu_cores(config)
+            memory = getattr(getattr(config.performance, "memory", None), "memory", "16GB")
+            processes = getattr(perf, "processes", 1)
+            walltime = getattr(perf, "walltime", "24:00:00")
+            job_extra = getattr(perf, "job_extra", ["--exclusive"])
+            jobs = getattr(perf, "jobs", 10)
+            if isinstance(memory, str):
+                mem_str = memory
+            else:
+                mem_str = "16GB"
+            cluster = SLURMCluster(
+                cores=cpu_cores,
+                memory=mem_str,
+                processes=processes,
+                walltime=walltime,
+                job_extra_directives=job_extra,
+            )
+            cluster.scale(jobs=jobs)
+            with Client(cluster) as client:
+                logging.info(f"Dask HPC cluster started with {jobs} jobs, {cpu_cores} cores, and {mem_str} memory per job.")
+                run_gwas(config, process_path, result_path)
+            logging.info("Dask HPC cluster started.")
+        else:
+            logging.info("HPC cluster not enabled, running in local mode.")
+            run_gwas(config, process_path, result_path)
+        t1 = time.time()
+        step_times["GWAS"] = t1 - t0
+        logging.info(f"Step 'GWAS' finished in {step_times['GWAS']:.2f} seconds.")
+    else:
+        logging.info("GWAS results already exist, skipping analysis step.")
+
+    # csv结果生成，画曼哈顿图和QQ图
     t0 = time.time()
-    ds = run_pca(config, ds)
+    run_result(config, result_path)
     t1 = time.time()
-    step_times["PCA"] = t1 - t0
-    logging.info(f"Step 'PCA' finished in {step_times['PCA']:.2f} seconds.")
-    # GWAS分析 / GWAS
-    t0 = time.time()
-    ds_lr = run_gwas(config, ds)
-    t1 = time.time()
-    step_times["GWAS"] = t1 - t0
-    logging.info(f"Step 'GWAS' finished in {step_times['GWAS']:.2f} seconds.")
+    step_times["Result"] = t1 - t0
+    logging.info(f"Results processed and saved in {config.output.outdir}.")
+
     total_end = time.time()
+    logging.info(f"Step 'merge' finished in {step_times['merge']:.2f} seconds.")
+    logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
+    logging.info(f"Step 'PCA' finished in {step_times['PCA']:.2f} seconds.")
+    logging.info(f"Step 'Process' finished in {step_times['Process']:.2f} seconds.")
+    logging.info(f"Step 'GWAS' finished in {step_times['GWAS']:.2f} seconds.")
+    logging.info(f"Step 'Result' finished in {step_times['Result']:.2f} seconds.")
     logging.info(f"Total time: {total_end - total_start:.2f} seconds")
 
 if __name__ == "__main__":
