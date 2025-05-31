@@ -1,3 +1,5 @@
+import logging
+
 import dask.array as da
 import sgkit as sg
 
@@ -17,7 +19,7 @@ def run_process(config, ds, process_path):
     # 从配置对象获取参数 / Get parameters from config object
     traits = config.gwas.traits
     covariates = config.gwas.covariates
-
+    logging.info("Data processing started...")
     ds["variant_contig_name"] = ds.contig_id[ds.variant_contig]
     # 计算等位基因剂量（后续GWAS用）
     ds["call_dosage"] = ds.call_genotype.sum(dim="ploidy")
@@ -27,5 +29,6 @@ def run_process(config, ds, process_path):
     for col in list(traits) + list(covariates):
         mask &= ~ds[col].isnull().persist()
     ds = ds.sel(samples=mask.compute())
-    sg.save_dataset(ds, process_path)
+    sg.save_dataset(ds, process_path, auto_rechunk=True)
+    logging.info("Data processing finished.")
     return process_path

@@ -18,6 +18,7 @@ def run_pca(config, ds):
     """
     try:
         pcs = config.pca.pcs
+        logging.info(f"Running PCA analysis with {pcs} principal components...")
         # 计算等位基因计数
         # Calculate alternate allele counts
         ds_pca = sg.stats.pca.count_call_alternate_alleles(ds)

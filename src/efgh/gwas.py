@@ -34,10 +34,11 @@ def run_gwas(config, process_path, result_path):
                     covariates=covariates,
                     traits=traits
                 )
-                sg.save_dataset(ds_lr, config.output.outdir, overwrite=True)
+                ds_lr = ds_lr.unify_chunks()
+                sg.save_dataset(ds_lr, result_path,auto_rechunk=True)
             except Exception:
                 logging.error("Failed to run linear regression GWAS. Please check your input data and configuration.")
-                raise RuntimeError("Failed to run linear regression GWAS.") from None
+                raise #RuntimeError("Failed to run linear regression GWAS.") from None
             logging.info("Linear regression GWAS completed successfully")
         # elif model == "regenie":
         #     # 这段有点疑问，暂时不提供支持

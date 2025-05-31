@@ -188,12 +188,11 @@ def run(user_config, **kwargs):
     logging.info(f"Results processed and saved in {config.output.outdir}.")
 
     total_end = time.time()
-    logging.info(f"Step 'merge' finished in {step_times['merge']:.2f} seconds.")
-    logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
-    logging.info(f"Step 'PCA' finished in {step_times['PCA']:.2f} seconds.")
-    logging.info(f"Step 'Process' finished in {step_times['Process']:.2f} seconds.")
-    logging.info(f"Step 'GWAS' finished in {step_times['GWAS']:.2f} seconds.")
-    logging.info(f"Step 'Result' finished in {step_times['Result']:.2f} seconds.")
+    for step in ["merge", "QC", "PCA", "Process", "GWAS", "Result"]:
+        if step in step_times:
+            logging.info(f"Step '{step}' finished in {step_times[step]:.2f} seconds.")
+        else:
+            logging.info(f"Step '{step}' skipped.")
     logging.info(f"Total time: {total_end - total_start:.2f} seconds")
 
 if __name__ == "__main__":

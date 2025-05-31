@@ -2,6 +2,7 @@ import logging
 import os
 import pandas as pd
 import sgkit as sg
+import numpy as np
 from .plotting import manhattan_plot_chunked, qq_plot
 
 def run_result(config, result_path):
