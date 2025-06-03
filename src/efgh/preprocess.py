@@ -29,6 +29,19 @@ def run_process(config, ds, process_path):
     for col in list(traits) + list(covariates):
         mask &= ~ds[col].isnull().persist()
     ds = ds.sel(samples=mask.compute())
+    #print(list(ds.data_vars))
+    # 只保留必要字段
+    needed_vars = [
+        "variant_contig_name",
+        "call_dosage",
+        "contig_id",
+        "variant_contig",
+        "variant_position",
+        "variant_allele",
+        "call_genotype",
+        "call_genotype_mask"
+    ] + list(traits) + list(covariates)
+    ds = ds[needed_vars]
     sg.save_dataset(ds, process_path, auto_rechunk=True)
     logging.info("Data processing finished.")
     return process_path

@@ -33,6 +33,19 @@ def run_gwas(config, ds, result_path):
                     traits=traits
                 )
                 ds_lr = ds_lr.unify_chunks()
+                #print(list(ds_lr.data_vars))
+                # 只保留必要字段
+                needed_vars = [
+                    "variant_contig_name",
+                    "call_dosage",
+                    "variant_contig",
+                    "variant_position",
+                    "variant_allele",
+                    "variant_linreg_beta",
+                    "variant_linreg_t_value",
+                    "variant_linreg_p_value"
+                ] + list(traits)
+                ds_lr = ds_lr[needed_vars]
                 sg.save_dataset(ds_lr, result_path,auto_rechunk=True)
             except Exception:
                 logging.error("Failed to run linear regression GWAS. Please check your input data and configuration.")
