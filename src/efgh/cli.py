@@ -12,6 +12,7 @@ from .gwas import run_gwas
 from .preprocess import run_process
 from .result import run_result
 from .process import run_pca_and_gwas
+from .haplotype import run_haplotype
 
 DEFAULT_CONFIG_PKG = "efgh.configs"
 DEFAULT_CONFIG_FILE = "default.yaml"
@@ -104,76 +105,92 @@ def run(user_config, **kwargs):
         raise RuntimeError("Failed to create output directory.") from None
     process_path = os.path.join(temp_path, "process.vcz")
     result_path = os.path.join(temp_path, "result.vcz")
+    try:
+        ds = sg.load_dataset(vcz_path)
+        ds["variant_contig_name"] = ds.contig_id[ds.variant_contig]
+        # 计算等位基因剂量
+        ds["call_dosage"] = ds.call_genotype.sum(dim="ploidy")
+    except Exception:
+        logging.error("Failed to load Zarr dataset. Please check your Zarr file path and format.")
+        raise RuntimeError("Failed to load Zarr dataset.") from None
 
-    if not os.path.exists(process_path):
-        try:
-            ds = sg.load_dataset(vcz_path)
-        except Exception:
-            logging.error("Failed to load Zarr dataset. Please check your Zarr file path and format.")
-            raise RuntimeError("Failed to load Zarr dataset.") from None
+    # 合并表型文件
+    t0 = time.time()
+    ds = run_merge(config, ds)
+    t1 = time.time()
+    step_times["merge"] = t1 - t0
+    logging.info(f"Step 'merge' finished in {step_times['merge']:.2f} seconds.")
 
-        # 合并表型文件
-        t0 = time.time()
-        ds = run_merge(config, ds)
-        t1 = time.time()
-        step_times["merge"] = t1 - t0
-        logging.info(f"Step 'merge' finished in {step_times['merge']:.2f} seconds.")
+    if config.gwas.run_gwas:
+        if not os.path.exists(process_path):
+            # 质量控制 / Quality Control
+            t0 = time.time()
+            ds = run_qc(config, ds)
+            t1 = time.time()
+            step_times["QC"] = t1 - t0
+            logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
 
-        # 质量控制 / Quality Control
-        t0 = time.time()
-        ds = run_qc(config, ds)
-        t1 = time.time()
-        step_times["QC"] = t1 - t0
-        logging.info(f"Step 'QC' finished in {step_times['QC']:.2f} seconds.")
+            # 数据处理
+            t0 = time.time()
+            ds = run_process(config, ds, process_path)
+            t1 = time.time()
+            step_times["Process"] = t1 - t0
+            logging.info(f"Data preprocessing completed in {step_times['Process']:.2f} seconds.")
 
-        # 数据处理
-        t0 = time.time()
-        run_process(config, ds, process_path)
-        t1 = time.time()
-        step_times["Process"] = t1 - t0
-        logging.info(f"Data preprocessing completed in {step_times['Process']:.2f} seconds.")
-
-    else:
-        logging.info("Data preprocessing completed, proceeding directly to analysis workflow.")
-    if not os.path.exists(result_path):
-        # 根据 performance.hpc 启动 Dask 集群
-        if getattr(getattr(config, "performance", None), "hpc", False):
-            from dask.distributed import Client
-            from dask_jobqueue import SLURMCluster
-            perf = config.performance
-            cpu_cores = get_cpu_cores(config)
-            memory = getattr(getattr(config.performance, "memory", None), "memory", "16GB")
-            processes = getattr(perf, "processes", 1)
-            walltime = getattr(perf, "walltime", "24:00:00")
-            job_extra = getattr(perf, "job_extra", ["--exclusive"])
-            jobs = getattr(perf, "jobs", 10)
-            if isinstance(memory, str):
-                mem_str = memory
+        else:
+            logging.info("Data preprocessing completed, proceeding directly to analysis workflow.")
+        if not os.path.exists(result_path):
+            # 根据 performance.hpc 启动 Dask 集群
+            if getattr(getattr(config, "performance", None), "hpc", False):
+                from dask.distributed import Client
+                from dask_jobqueue import SLURMCluster
+                perf = config.performance
+                cpu_cores = get_cpu_cores(config)
+                memory = getattr(getattr(config.performance, "memory", None), "memory", "16GB")
+                processes = getattr(perf, "processes", 1)
+                walltime = getattr(perf, "walltime", "24:00:00")
+                job_extra = getattr(perf, "job_extra", ["--exclusive"])
+                jobs = getattr(perf, "jobs", 10)
+                if isinstance(memory, str):
+                    mem_str = memory
+                else:
+                    mem_str = "16GB"
+                cluster = SLURMCluster(
+                    cores=cpu_cores,
+                    memory=mem_str,
+                    processes=processes,
+                    walltime=walltime,
+                    job_extra_directives=job_extra,
+                )
+                cluster.scale(jobs=jobs)
+                with Client(cluster) as client:
+                    logging.info(f"Dask HPC cluster started with {jobs} jobs, {cpu_cores} cores, and {mem_str} memory per job.")
+                    run_pca_and_gwas(config, process_path, result_path, step_times)
             else:
-                mem_str = "16GB"
-            cluster = SLURMCluster(
-                cores=cpu_cores,
-                memory=mem_str,
-                processes=processes,
-                walltime=walltime,
-                job_extra_directives=job_extra,
-            )
-            cluster.scale(jobs=jobs)
-            with Client(cluster) as client:
-                logging.info(f"Dask HPC cluster started with {jobs} jobs, {cpu_cores} cores, and {mem_str} memory per job.")
+                logging.info("HPC cluster not enabled, running in local mode.")
                 run_pca_and_gwas(config, process_path, result_path, step_times)
         else:
-            logging.info("HPC cluster not enabled, running in local mode.")
-            run_pca_and_gwas(config, process_path, result_path, step_times)
-    else:
-        logging.info("GWAS results already exist, skipping analysis step.")
+            logging.info("GWAS results already exist, skipping analysis step.")
 
-    # csv结果生成，画曼哈顿图和QQ图
-    t0 = time.time()
-    run_result(config, result_path)
-    t1 = time.time()
-    step_times["Result"] = t1 - t0
-    logging.info(f"Results processed and saved in {config.output.outdir}.")
+        # csv结果生成，画曼哈顿图和QQ图
+        t0 = time.time()
+        run_result(config, result_path)
+        t1 = time.time()
+        step_times["Result"] = t1 - t0
+        logging.info(f"Results processed and saved in {config.output.outdir}.")
+    else:
+        logging.info("GWAS analysis skipped as 'run_gwas' is set to False.")
+
+    if config.haplotype.run_haplotype:
+        # 单倍型分析
+        try:
+            run_haplotype(ds, config)
+            logging.info("Haplotype analysis completed.")
+        except Exception:
+            logging.error("Failed to run haplotype analysis.")
+            raise #RuntimeError("Failed to run haplotype analysis.") from None
+    else:
+        logging.info("run_haplotype is False, skipping haplotype analysis.")
 
     total_end = time.time()
     for step in ["merge", "QC", "PCA", "Process", "GWAS", "Result"]:

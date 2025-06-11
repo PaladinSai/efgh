@@ -20,10 +20,6 @@ def run_process(config, ds, process_path):
     traits = config.gwas.traits
     covariates = config.gwas.covariates
     logging.info("Data processing started...")
-    ds["variant_contig_name"] = ds.contig_id[ds.variant_contig]
-    # 计算等位基因剂量（后续GWAS用）
-    ds["call_dosage"] = ds.call_genotype.sum(dim="ploidy")
-
     # 去除性状列和协变量列的空值
     mask = da.ones(ds.sizes["samples"], dtype=bool)
     for col in list(traits) + list(covariates):
@@ -39,9 +35,10 @@ def run_process(config, ds, process_path):
         "variant_position",
         "variant_allele",
         "call_genotype",
-        "call_genotype_mask"
+        "call_genotype_mask",
+        "sample_id",
     ] + list(traits) + list(covariates)
-    ds = ds[needed_vars]
-    sg.save_dataset(ds, process_path, auto_rechunk=True)
+    ds_save = ds[needed_vars]
+    sg.save_dataset(ds_save, process_path, auto_rechunk=True)
     logging.info("Data processing finished.")
-    return process_path
+    return ds

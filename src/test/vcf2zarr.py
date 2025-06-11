@@ -6,9 +6,9 @@ VCF to Zarr module. Uses the bio2zarr CLI tool to convert VCF files to Zarr form
 import os
 import subprocess
 import logging
-from .config import get_cpu_cores
+import pysam
 
-def vcf_to_zarr(config):
+def vcf_to_zarr(vcf_path, result_path):
     """
     使用bio2zarr CLI将VCF文件转换为zarr格式，支持多进程。
     Convert VCF file to Zarr format using bio2zarr CLI, support multi-process.
@@ -18,44 +18,28 @@ def vcf_to_zarr(config):
     返回zarr文件路径
     Returns the path to the zarr file.
     """
-    vcf_path = config.input.vcf_path
-    outdir = os.path.join(config.output.outdir, "temp")
-    basename = "genotype_raw"
-    icf_path = os.path.join(outdir, f"{basename}.icf")
-    zarr_path = os.path.join(outdir, f"{basename}.vcz")
+    basename = "test"
+    icf_path = os.path.join(result_path, f"{basename}.icf")
+    zarr_path = os.path.join(result_path, f"{basename}.vcz")
 
     # 获取CPU核心数，调用config中的方法
     # Get CPU core count from config utility
-    cpu_cores = get_cpu_cores(config)
+    cpu_cores = 8
 
     # 创建输出目录
     # Create output directory
     try:
-        os.makedirs(outdir, exist_ok=True)
+        os.makedirs(result_path, exist_ok=True)
     except Exception:
         logging.error("Failed to create output directory for Zarr conversion.")
-        raise RuntimeError("Failed to create output directory for Zarr conversion.") from None
+        #raise RuntimeError("Failed to create output directory for Zarr conversion.") from None
 
     # 检查VCF索引是否存在
     # Check if VCF index (.tbi) exists
     index_path = vcf_path + ".tbi"
     if not os.path.exists(index_path):
-        logging.error(
-            "VCF index file not found: %s\n"
-            "Please compress your VCF file with bgzip and create the index with tabix first.\n"
-            "Example:\n"
-            "  bgzip your.vcf\n"
-            "  tabix -p vcf your.vcf.gz\n"
-            "Then set input.vcf_path to your.vcf.gz in the config.",
-            index_path
-        )
-        raise RuntimeError(
-            "VCF index file not found. Please compress your VCF file with bgzip and create the index with tabix first.\n"
-            "Example:\n"
-            "  bgzip your.vcf\n"
-            "  tabix -p vcf your.vcf.gz\n"
-            "Then set input.vcf_path to your.vcf.gz in the config."
-        )
+        pysam.tabix_compress(vcf_path, f"{vcf_path}.gz", force=True)
+        pysam.tabix_index(f"{vcf_path}.gz", preset="vcf", force=True)
 
     # 如果zarr文件已存在，直接返回
     # If zarr file already exists, return directly
@@ -73,7 +57,7 @@ def vcf_to_zarr(config):
         )
     except Exception:
         logging.error("Failed to run 'vcf2zarr explode'. Please check your VCF file and bio2zarr installation.")
-        raise RuntimeError("Failed to run 'vcf2zarr explode'.") from None
+        #raise RuntimeError("Failed to run 'vcf2zarr explode'.") from None
 
     # 2. vcf2zarr encode --force --worker-processes N icf vcz
     # 2. vcf2zarr encode --force --worker-processes N icf vcz
@@ -89,3 +73,6 @@ def vcf_to_zarr(config):
 
     logging.info(f"VCF to Zarr conversion completed. Output path: {zarr_path}")
     return zarr_path
+
+
+vcf_to_zarr("/mnt/g/code/python/efgh/data/test.vcf.gz", "/mnt/g/code/python/efgh/data")

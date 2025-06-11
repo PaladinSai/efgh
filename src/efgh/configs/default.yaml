@@ -1,18 +1,19 @@
 performance:
-  hpc: false  # 是否在高性能计算集群上运行 / Whether to run on a high-performance computing cluster
-  cpu_cores: 8  # CPU核心数 / Number of CPU cores to use
-  memory: 16G  # 内存大小 / Memory size
-  chunk_size: 10000 # 输出数据时的分块大小，避免内存溢出的问题 / Chunk size for output data to avoid memory overflow
-  processes: 10
-  walltime: 48:00:00  # 最大运行时间 / Maximum wall time for the job
-  job_extra: ["--exclusive"]  # 额外的作业参数 / Additional job parameters, e.g., ["#SBATCH -J efgh", "#SBATCH -p normal", "#SBATCH -e id.error"，"#SBATCH -o id.out"] for exclusive node access
-  jobs: 10
+  hpc: false  # 是否在高性能计算集群上运行
+  cpu_cores: 10  # CPU核心数
+  memory: 50G  # 内存大小
+  chunk_size: 100000 # 输出数据时的分块大小，避免内存溢出的问题，建议最大分块100000
+  processes: 10 # 每个任务并行处理的进程数
+  walltime: 48:00:00  # 最大运行时间
+  job_extra: []  # 额外的作业参数，可为空，示例 ["#SBATCH -J efgh", "#SBATCH -p normal", "#SBATCH -e id.error"，"#SBATCH -o id.out","--exclusive"]
+  jobs: 10 # 每个作业的任务数
 input:
-  vcz_path: ./data/mouse_hs1940.vcz  # VCF或VCF.GZ基因型文件路径（相对于项目根目录）
-  pheno_path: ./data/mouse_hs1940.csv  # 表型CSV文件路径（相对于项目根目录）
+  vcz_path: ./data/mouse_hs1940.vcz  # VCF或VCF.GZ基因型文件路径（建议使用绝对路径）
+  pheno_path: ./data/mouse_hs1940.csv  # 表型CSV文件路径（建议使用绝对路径）
+  gff_path: ./data/gencode.vM37.basic.annotation.gff3  # GFF文件路径（建议使用绝对路径）
 
 output:
-  outdir: ./results                                # 输出目录（相对于项目根目录）
+  outdir: ./results                                # 输出目录（建议使用绝对路径）
 
 qc:
   maf: 0.01                                          # 最小等位基因频率（MAF）过滤阈值
@@ -22,6 +23,7 @@ qc:
 pca:
   pcs: 3                                             # 主成分分析（PCA）计算的主成分数量
 gwas:
+  run_gwas: false                                  # 是否运行GWAS分析
   traits: CD8                                    # 需要分析的表型列名，示例：CD8, MCH
   covariates:                                        # 需要分析的协变量列表（留空则不使用协变量），示例格式：covariates_1,covariates_2
   models: linear_regression                     # 支持 linear_regression, regenie 或两者组合，示例格式：linear_regression, regenie
@@ -38,3 +40,8 @@ gwas:
       below: "#1f77b4"
       above: "#d62728"
       between: "#2ca02c"
+haplotype:
+  run_haplotype: true  # 是否运行单倍型分析
+  gene_name: "Xkr4"  # 需要分析的基因名称
+  phase_method: ignore_het  # 可选: ignore_het, random_het, mode_het
+  phenotype: "CD8"  # 需要分析的表型列名
